@@ -15,6 +15,10 @@ fileprivate struct Item<R : Rules> : Hashable {
     }
 }
 
+public struct ReduceReduceConflict<R : Rules> : Error {
+    let matching : [R]
+}
+
 fileprivate struct ItemSet<R : Rules> : Hashable {
     var rep : [Item<R>] = []
     
@@ -68,8 +72,12 @@ fileprivate struct ItemSet<R : Rules> : Hashable {
         return Dictionary(items.map{($0, [$1])}, uniquingKeysWith: +).mapValues{ItemSet($0)}
     }
     
-    var reduceRule : R? {
-        rep.first(where: {$0.tbd.isEmpty})?.rule
+    func reduceRule() throws -> R? {
+        let results : [R] = rep.lazy.filter(\.tbd.isEmpty).compactMap(\.rule)
+        if results.count > 1 {
+            throw ReduceReduceConflict(matching: results)
+        }
+        return results.first
     }
     
 }
@@ -121,17 +129,15 @@ public enum LR0Action<R : Rules> : Codable, Equatable {
     }
 }
 
+public struct ShiftReduceConflict : Error {}
+public struct AcceptConflict : Error {}
+
 fileprivate struct ItemSetTable<R : Rules> {
     
     struct _Edge : Hashable {
         let start : ItemSet<R>
         let symb : Expr<R.Term, R.NTerm>
         let end : ItemSet<R>
-    }
-    
-    struct Tail : Hashable {
-        let symb : Expr<R.Term, R.NTerm>
-        let end : Int
     }
     
     var states : [ItemSet<R>] = []
@@ -174,31 +180,37 @@ fileprivate struct ItemSetTable<R : Rules> {
         }
     }
     
-    var actionTable : [R.Term? : [Int : LR0Action<R>]] {
+    func actionTable() throws -> [R.Term? : [Int : LR0Action<R>]] {
         let keyAndVals = edges.compactMap{(key : Expr<R.Term, R.NTerm>, val : [Int : Int]) -> (R.Term, [Int : LR0Action<R>])? in
             guard case .term(let t) = key else {return nil}
             let dict = Dictionary(uniqueKeysWithValues: val.map{start, end in
-                (start, states[start].reduceRule.map{LR0Action.reduce($0)} ?? .shift(end))
+                (start, LR0Action<R>.shift(end))
             })
             return (t, dict)
         }
         var dict = Dictionary(uniqueKeysWithValues: keyAndVals) as [R.Term? : [Int : LR0Action<R>]]
         for start in states.indices {
-            if let rule = states[start].reduceRule {
+            if let rule = try states[start].reduceRule() {
                 for term in Array(R.Term.allCases) as [R.Term?] + [nil] {
                     if dict[term] == nil {
                         dict[term] = [start: .reduce(rule)]
                     }
                     else {
+                        if dict[term]?[start] != nil {
+                            throw ShiftReduceConflict()
+                        }
                         dict[term]?[start] = .reduce(rule)
                     }
                 }
             }
-            if states[start].rep.contains(where: {$0.rule == nil}) {
+            if states[start].rep.contains(where: {$0.rule == nil && $0.tbd.isEmpty}) {
                 if dict[nil] == nil {
                     dict[nil] = [start : .accept]
                 }
                 else {
+                    if dict[nil]?[start] != nil {
+                        throw AcceptConflict()
+                    }
                     dict[nil]?[start] = .accept
                 }
             }
@@ -231,9 +243,9 @@ public struct LR0Parser<R : Rules> : Codable, Equatable {
     public let actions : [R.Term? : [Int : LR0Action<R>]]
     public let gotos : [R.NTerm : [Int : Int]]
     
-    public init(rules: R.Type) {
+    public init(rules: R.Type) throws {
         let table = ItemSetTable(rules: rules)
-        self.actions = table.actionTable
+        self.actions = try table.actionTable()
         self.gotos = table.gotoTable
     }
     

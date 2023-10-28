@@ -4,13 +4,13 @@ import XCTest
 final class LRParserTests: XCTestCase {
     
     func testOnePlusOneLR0() throws {
-        let parser = LR0Parser(rules: MyRules.self)
+        let parser = try LR0Parser(rules: MyRules.self)
         let ast = try parser.parse("1+1")
         XCTAssertEqual(ast, .plus(.b(.one), .one))
     }
     
     func testDecodeEncodeEqual() throws {
-        let parser = LR0Parser(rules: MyRules.self)
+        let parser = try LR0Parser(rules: MyRules.self)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(parser)
