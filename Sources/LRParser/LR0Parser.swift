@@ -1,64 +1,11 @@
+//
+//  LR0Parser.swift
+//
+//
+//  Created by Markus Kasperczyk on 28.10.23.
+//
 
-
-public protocol Terminal : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == Character {}
-
-public protocol NonTerminal : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == String {}
-
-public protocol Rules : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == String {
-    associatedtype Term : Terminal
-    associatedtype NTerm : NonTerminal
-    associatedtype Output
-    static var goal : NTerm {get}
-    var rule : Rule<Term, NTerm, Output> {get}
-}
-
-public struct Stack<T> {
-    
-    var rep : [T] = []
-    public init() {}
-    
-    mutating func push(_ t: T) {
-        rep.append(t)
-    }
-    
-    mutating func pop() -> T? {
-        guard peek() != nil else {return nil}
-        return rep.removeLast()
-    }
-    
-    func peek() -> T? {
-        rep.last
-    }
-    
-}
-
-public struct Rule<T : Terminal, NT : NonTerminal, Output> {
-    public let lhs : NT
-    public let rhs : [Expr<T, NT>]
-    public let parse : (inout Stack<Output>) throws -> Void
-    public init(_ lhs: NT, expression rhs: Expr<T, NT>..., parse: @escaping (inout Stack<Output>) throws -> Void) {
-        self.lhs = lhs
-        self.rhs = rhs
-        self.parse = parse
-    }
-}
-
-public enum Expr<T : Hashable, NT : Hashable> : Hashable {
-    case term(T)
-    case nonTerm(NT)
-}
-
-prefix operator /
-
-public prefix func /<T, NT>(_ t: T) -> Expr<T, NT> {
-    .term(t)
-}
-
-public prefix func /<T, NT>(_ nt: NT) -> Expr<T, NT> {
-    .nonTerm(nt)
-}
-
-struct Item<R : Rules> : Hashable {
+fileprivate struct Item<R : Rules> : Hashable {
     let rule : R?
     var recognized : [Expr<R.Term, R.NTerm>]
     var tbd : [Expr<R.Term, R.NTerm>]
@@ -68,7 +15,7 @@ struct Item<R : Rules> : Hashable {
     }
 }
 
-struct ItemSet<R : Rules> : Hashable {
+fileprivate struct ItemSet<R : Rules> : Hashable {
     var rep : [Item<R>] = []
     
     private mutating func augment(accountedFor : inout Set<R.NTerm>, toBeAccountedFor: inout Set<R.NTerm>) {
@@ -127,13 +74,54 @@ struct ItemSet<R : Rules> : Hashable {
     
 }
 
-public enum Action<R : Rules> : Codable {
+public enum LR0Action<R : Rules> : Codable, Equatable {
     case shift(Int)
     case reduce(R)
     case accept
+    
+    enum RawType : String, Codable {
+        case shift, reduce, accept
+    }
+    struct TypeCoder : Codable {
+        let type : RawType
+    }
+    enum _Shift : String, Codable {case shift}
+    struct Shift : Codable {
+        let type : _Shift
+        let newState : Int
+    }
+    enum _Reduce : String, Codable {case reduce}
+    struct Reduce : Codable {
+        let type : _Reduce
+        let rule : R
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let type = try TypeCoder(from: decoder)
+        switch type.type {
+        case .shift:
+            let this = try Shift(from: decoder)
+            self = .shift(this.newState)
+        case .reduce:
+            let this = try Reduce(from: decoder)
+            self = .reduce(this.rule)
+        case .accept:
+            self = .accept
+        }
+    }
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .shift(let newState):
+            try Shift(type: .shift, newState: newState).encode(to: encoder)
+        case .reduce(let rule):
+            try Reduce(type: .reduce, rule: rule).encode(to: encoder)
+        case .accept:
+            try TypeCoder(type: .accept).encode(to: encoder)
+        }
+    }
 }
 
-struct ItemSetTable<R : Rules> {
+fileprivate struct ItemSetTable<R : Rules> {
     
     struct _Edge : Hashable {
         let start : ItemSet<R>
@@ -186,15 +174,15 @@ struct ItemSetTable<R : Rules> {
         }
     }
     
-    var actionTable : [R.Term? : [Int : Action<R>]] {
-        let keyAndVals = edges.compactMap{(key : Expr<R.Term, R.NTerm>, val : [Int : Int]) -> (R.Term, [Int : Action<R>])? in
+    var actionTable : [R.Term? : [Int : LR0Action<R>]] {
+        let keyAndVals = edges.compactMap{(key : Expr<R.Term, R.NTerm>, val : [Int : Int]) -> (R.Term, [Int : LR0Action<R>])? in
             guard case .term(let t) = key else {return nil}
             let dict = Dictionary(uniqueKeysWithValues: val.map{start, end in
-                (start, states[start].reduceRule.map{Action.reduce($0)} ?? .shift(end))
+                (start, states[start].reduceRule.map{LR0Action.reduce($0)} ?? .shift(end))
             })
             return (t, dict)
         }
-        var dict = Dictionary(uniqueKeysWithValues: keyAndVals) as [R.Term? : [Int : Action<R>]]
+        var dict = Dictionary(uniqueKeysWithValues: keyAndVals) as [R.Term? : [Int : LR0Action<R>]]
         for start in states.indices {
             if let rule = states[start].reduceRule {
                 for term in Array(R.Term.allCases) as [R.Term?] + [nil] {
@@ -238,9 +226,9 @@ public struct NoGoTo<NT> : Error {
 
 
 
-public struct LR0Parser<R : Rules> : Codable {
+public struct LR0Parser<R : Rules> : Codable, Equatable {
     
-    public let actions : [R.Term? : [Int : Action<R>]]
+    public let actions : [R.Term? : [Int : LR0Action<R>]]
     public let gotos : [R.NTerm : [Int : Int]]
     
     public init(rules: R.Type) {
@@ -249,14 +237,14 @@ public struct LR0Parser<R : Rules> : Codable {
         self.gotos = table.gotoTable
     }
     
-    func parse(_ stream: String) throws -> R.Output {
+    func parse<Out>(_ stream: String, do construction: (R, inout Stack<Out>) throws -> Void) throws ->Stack<Out> {
         
         var iterator = stream.makeIterator()
         var current = iterator.next()
         
         var stateStack = Stack<Int>()
         stateStack.push(0)
-        var outStack = Stack<R.Output>()
+        var outStack = Stack<Out>()
         
     loop:
         while true {
@@ -281,7 +269,7 @@ public struct LR0Parser<R : Rules> : Codable {
                     _ = stateStack.pop()
                 }
                 guard let stateAfter = stateStack.peek() else {throw UndefinedState()}
-                try rule.parse(&outStack)
+                try construction(reduce, &outStack)
                 guard let nextState = gotos[rule.lhs]?[stateAfter] else {throw NoGoTo(nonTerm: rule.lhs, state: stateAfter)}
                 stateStack.push(nextState)
                 
@@ -290,7 +278,16 @@ public struct LR0Parser<R : Rules> : Codable {
             }
             
         }
-        return outStack.pop()!
+        return outStack
+    }
+    
+    func buildStack(_ stream: String) throws -> Stack<R> {
+        try parse(stream, do: {$1.push($0)})
+    }
+    
+    func parse(_ stream: String) throws -> R.Output? where R : Constructions {
+        var stack = try parse(stream, do: {try $0.construction.parse(&$1)})
+        return stack.pop()
     }
     
 }

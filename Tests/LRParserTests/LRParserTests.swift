@@ -3,11 +3,20 @@ import XCTest
 
 final class LRParserTests: XCTestCase {
     
-    let parser = LR0Parser(rules: MyRules.self)
-    
-    func testExample() throws {
+    func testOnePlusOneLR0() throws {
+        let parser = LR0Parser(rules: MyRules.self)
         let ast = try parser.parse("1+1")
         XCTAssertEqual(ast, .plus(.b(.one), .one))
+    }
+    
+    func testDecodeEncodeEqual() throws {
+        let parser = LR0Parser(rules: MyRules.self)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        let data = try encoder.encode(parser)
+        print(String(data: data, encoding: .utf8)!)
+        let newParser = try JSONDecoder().decode(LR0Parser<MyRules>.self, from: data)
+        XCTAssertEqual(parser, newParser)
     }
     
 }
@@ -44,7 +53,7 @@ enum MyNTerm : String, NonTerminal {
 
 extension String : Error {}
 
-enum MyRules : String, Rules {
+enum MyRules : String, Constructions {
     
     case eTimes
     case ePlus
@@ -54,10 +63,10 @@ enum MyRules : String, Rules {
     
     static var goal: MyNTerm {.E}
     
-    var rule: Rule<MyTerm, MyNTerm, eAST> {
+    var construction: Construction<MyTerm, MyNTerm, eAST> {
         switch self {
         case .eTimes:
-            Rule(.E, expression: /.E, /.times, /.B) {stack in
+            Construction(.E, expression: /.E, /.times, /.B) {stack in
                 guard let eb = stack.pop(),
                       let b = eb.asB,
                       let e = stack.pop() else {
@@ -66,7 +75,7 @@ enum MyRules : String, Rules {
                 stack.push(.times(e, b))
             }
         case .ePlus:
-            Rule(.E, expression: /.E, /.plus, /.B) {stack in
+            Construction(.E, expression: /.E, /.plus, /.B) {stack in
                 guard let eb = stack.pop(),
                       let b = eb.asB,
                       let e = stack.pop() else {
@@ -75,18 +84,18 @@ enum MyRules : String, Rules {
                 stack.push(.plus(e, b))
             }
         case .eB:
-            Rule(.E, expression: /.B) {stack in
+            Construction(.E, expression: /.B) {stack in
                 guard let eb = stack.peek(),
                       nil != eb.asB else {
                     throw "Menno"
                 }
             }
         case .bZero:
-            Rule(.B, expression: /.zero) {stack in
+            Construction(.B, expression: /.zero) {stack in
                 stack.push(.b(.zero))
             }
         case .bOne:
-            Rule(.B, expression: /.one) {stack in
+            Construction(.B, expression: /.one) {stack in
                 stack.push(.b(.one))
             }
         }
