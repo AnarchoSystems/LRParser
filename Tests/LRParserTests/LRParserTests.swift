@@ -4,40 +4,24 @@ import LRParser
 final class LRParserTests: XCTestCase {
     
     func testOnePlusOneLR0() throws {
-        let parser = try LR0Parser(rules: MyRules.self)
+        let parser = try Parser.LR0(rules: MyRules.self)
         let ast = try parser.parse("1+1")
         XCTAssertEqual(ast, .plus(.b(.one), .one))
     }
     
     func testDecodeEncodeEqual() throws {
-        let parser = try LR0Parser(rules: MyRules.self)
+        let parser = try Parser.LR0(rules: MyRules.self)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(parser)
         print(String(data: data, encoding: .utf8)!)
-        let newParser = try JSONDecoder().decode(LR0Parser<MyRules>.self, from: data)
+        let newParser = try JSONDecoder().decode(Parser<MyRules>.self, from: data)
         XCTAssertEqual(parser, newParser)
     }
     
 }
 
-enum bAST : Equatable {
-    case zero
-    case one
-}
-
-indirect enum eAST : Equatable {
-    case b(bAST)
-    case plus(Self, bAST)
-    case times(Self, bAST)
-    var asB : bAST? {
-        guard case .b(let b) = self else {
-            return nil
-        }
-        return b
-    }
-}
-
+// example from https://en.wikipedia.org/wiki/LR_parser#Additional_example_1+1
 
 enum MyTerm : Character, Terminal {
     case zero = "0"
@@ -99,5 +83,22 @@ enum MyRules : String, Constructions {
                 stack.push(.b(.one))
             }
         }
+    }
+}
+
+enum bAST : Equatable {
+    case zero
+    case one
+}
+
+indirect enum eAST : Equatable {
+    case b(bAST)
+    case plus(Self, bAST)
+    case times(Self, bAST)
+    var asB : bAST? {
+        guard case .b(let b) = self else {
+            return nil
+        }
+        return b
     }
 }
