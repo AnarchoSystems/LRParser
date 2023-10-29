@@ -7,11 +7,19 @@
 
 fileprivate struct Item<R : Rules> : Hashable {
     let rule : R?
-    var recognized : [Expr<R.Term, R.NTerm>]
-    var tbd : [Expr<R.Term, R.NTerm>]
+    private let all : [Expr<R.Term, R.NTerm>]
+    private var ptr = 0
+    init(rule: R?, _ all: [Expr<R.Term, R.NTerm>]) {
+        self.rule = rule
+        self.all = all
+        self.ptr = 0
+    }
     mutating func advance() {
-        guard !tbd.isEmpty else {return}
-        recognized.append(tbd.removeFirst())
+        guard all.indices.contains(ptr) else {return}
+        ptr+=1
+    }
+    var tbd : some Collection<Expr<R.Term, R.NTerm>> {
+        all[ptr...]
     }
 }
 
@@ -28,7 +36,7 @@ fileprivate struct ItemSet<R : Rules> : Hashable {
             for rule in R.allCases {
                 let rl = rule.rule
                 if rl.lhs != nT {continue}
-                news.append(Item(rule: rule, recognized: [], tbd: rl.rhs))
+                news.append(Item(rule: rule, rl.rhs))
             }
         }
         rep.append(contentsOf: news)
@@ -43,7 +51,7 @@ fileprivate struct ItemSet<R : Rules> : Hashable {
     }
     
     init() {
-        self = .init([.init(rule: nil, recognized: [], tbd: [.nonTerm(R.goal)])])
+        self = .init([.init(rule: nil, [.nonTerm(R.goal)])])
     }
     
     init(_ items: [Item<R>]) {
@@ -64,8 +72,8 @@ fileprivate struct ItemSet<R : Rules> : Hashable {
         }
     }
     
-    func nexts() -> [Expr<R.Term, R.NTerm> : ItemSet<R>] {
-        var items = rep.compactMap{item in item.tbd.first.map{($0, item)}}
+    func nexts(_ expr: Expr<R.Term, R.NTerm>) -> [Expr<R.Term, R.NTerm> : ItemSet<R>] {
+        var items = rep.compactMap{item in item.tbd.first.flatMap{$0 == expr ? ($0, item) : nil}}
         for idx in items.indices {
             items[idx].1.advance()
         }
@@ -145,24 +153,30 @@ fileprivate struct ItemSetTable<R : Rules> {
     
     init(rules: R.Type) {
         states.append(.init())
+        var newStates = states
         var _states = Set(states)
         var _edges = Set<_Edge>()
         while true {
+            var newNewStates = [ItemSet<R>]()
             var didSomething = false
-            for state in states {
-                for (symb, end) in state.nexts() {
-                    if !_states.contains(end) {
-                        didSomething = true
-                        states.append(end)
-                        _states.insert(end)
-                    }
-                    let edge = _Edge(start: state, symb: symb, end: end)
-                    if !_edges.contains(edge) {
-                        didSomething = true
-                        _edges.insert(edge)
+            for state in newStates {
+                for expr in R.Term.allCases.map(Expr.term) + R.NTerm.allCases.map(Expr.nonTerm) {
+                    for (symb, end) in state.nexts(expr) {
+                        if !_states.contains(end) {
+                            didSomething = true
+                            newNewStates.append(end)
+                            _states.insert(end)
+                        }
+                        let edge = _Edge(start: state, symb: symb, end: end)
+                        if !_edges.contains(edge) {
+                            didSomething = true
+                            _edges.insert(edge)
+                        }
                     }
                 }
             }
+            newStates = newNewStates
+            states.append(contentsOf: newStates)
             if (!didSomething)
             {
                 break
