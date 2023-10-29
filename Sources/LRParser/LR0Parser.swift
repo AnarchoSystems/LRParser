@@ -5,83 +5,52 @@
 //  Created by Markus Kasperczyk on 28.10.23.
 //
 
-fileprivate struct Item<R : Rules> : Hashable {
+fileprivate struct Item<R : Rules> : Node {
     let rule : R?
     private let all : [Expr<R.Term, R.NTerm>]
-    private var ptr = 0
+    private let ptr : Int
+    private init(rule: R?, _ all: [Expr<R.Term, R.NTerm>], ptr: Int) {
+        self.rule = rule
+        self.all = all
+        self.ptr = ptr
+    }
+    func tryAdvance(_ expr: Expr<R.Term, R.NTerm>) -> Item<R>? {
+        tbd.first.flatMap{$0 == expr ? Item(rule: rule, all, ptr: ptr + 1) : nil}
+    }
     init(rule: R?, _ all: [Expr<R.Term, R.NTerm>]) {
         self.rule = rule
         self.all = all
         self.ptr = 0
     }
-    mutating func advance() {
-        guard all.indices.contains(ptr) else {return}
-        ptr+=1
+    var canReach: [R.NTerm : [Item<R>]] {
+        guard let next = tbd.first, case .nonTerm(let nT) = next else {
+            return [:]
+        }
+        return [nT : R.allCases.compactMap {rule in
+            let ru = rule.rule
+            guard ru.lhs == nT else {return nil}
+            return Item(rule: rule, ru.rhs)
+        }]
     }
     var tbd : some Collection<Expr<R.Term, R.NTerm>> {
         all[ptr...]
     }
+    
 }
 
-public struct ReduceReduceConflict<R : Rules> : Error {
-    let matching : [R]
-}
-
-fileprivate struct ItemSet<R : Rules> : Hashable {
-    var rep : [Item<R>] = []
+fileprivate struct ItemSet<R : Rules> : Node {
     
-    private mutating func augment(accountedFor : inout Set<R.NTerm>, toBeAccountedFor: inout Set<R.NTerm>) {
-        var news : [Item<R>] = []
-        for nT in toBeAccountedFor {
-            for rule in R.allCases {
-                let rl = rule.rule
-                if rl.lhs != nT {continue}
-                news.append(Item(rule: rule, rl.rhs))
-            }
-        }
-        rep.append(contentsOf: news)
-        accountedFor.formUnion(toBeAccountedFor)
-        toBeAccountedFor = []
-        for item in news {
-            guard let next = item.tbd.first, case .nonTerm(let nT) = next, !accountedFor.contains(nT) else {
-                continue
-            }
-            toBeAccountedFor.insert(nT)
-        }
-    }
+    let graph : ClosedGraph<Item<R>>
     
-    init() {
-        self = .init([.init(rule: nil, [.nonTerm(R.goal)])])
-    }
-    
-    init(_ items: [Item<R>]) {
-        rep = items
-        var accountedFor : Set<R.NTerm> = []
-        var toBeAccountedFor : Set<R.NTerm> = []
-        for item in items {
-            guard let next = item.tbd.first else {continue}
-            switch next {
-            case .term:
-                return
-            case .nonTerm(let nT):
-                toBeAccountedFor.insert(nT)
-            }
-        }
-        while !toBeAccountedFor.isEmpty {
-            augment(accountedFor: &accountedFor, toBeAccountedFor: &toBeAccountedFor)
-        }
-    }
-    
-    func nexts(_ expr: Expr<R.Term, R.NTerm>) -> [Expr<R.Term, R.NTerm> : ItemSet<R>] {
-        var items = rep.compactMap{item in item.tbd.first.flatMap{$0 == expr ? ($0, item) : nil}}
-        for idx in items.indices {
-            items[idx].1.advance()
-        }
-        return Dictionary(items.map{($0, [$1])}, uniquingKeysWith: +).mapValues{ItemSet($0)}
+    var canReach: [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
+        let exprs = Set(graph.nodes.compactMap(\.tbd.first))
+        return Dictionary(uniqueKeysWithValues: exprs.map{expr in
+            (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}))])
+        })
     }
     
     func reduceRule() throws -> R? {
-        let results : [R] = rep.lazy.filter(\.tbd.isEmpty).compactMap(\.rule)
+        let results : [R] = graph.nodes.lazy.filter(\.tbd.isEmpty).compactMap(\.rule)
         if results.count > 1 {
             throw ReduceReduceConflict(matching: results)
         }
@@ -90,121 +59,28 @@ fileprivate struct ItemSet<R : Rules> : Hashable {
     
 }
 
-public enum LR0Action<R : Rules> : Codable, Equatable {
-    case shift(Int)
-    case reduce(R)
-    case accept
-    
-    enum RawType : String, Codable {
-        case shift, reduce, accept
-    }
-    struct TypeCoder : Codable {
-        let type : RawType
-    }
-    enum _Shift : String, Codable {case shift}
-    struct Shift : Codable {
-        let type : _Shift
-        let newState : Int
-    }
-    enum _Reduce : String, Codable {case reduce}
-    struct Reduce : Codable {
-        let type : _Reduce
-        let rule : R
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let type = try TypeCoder(from: decoder)
-        switch type.type {
-        case .shift:
-            let this = try Shift(from: decoder)
-            self = .shift(this.newState)
-        case .reduce:
-            let this = try Reduce(from: decoder)
-            self = .reduce(this.rule)
-        case .accept:
-            self = .accept
-        }
-    }
-    public func encode(to encoder: Encoder) throws {
-        switch self {
-        case .shift(let newState):
-            try Shift(type: .shift, newState: newState).encode(to: encoder)
-        case .reduce(let rule):
-            try Reduce(type: .reduce, rule: rule).encode(to: encoder)
-        case .accept:
-            try TypeCoder(type: .accept).encode(to: encoder)
-        }
-    }
-}
-
-public struct ShiftReduceConflict : Error {}
-public struct AcceptConflict : Error {}
-
 fileprivate struct ItemSetTable<R : Rules> {
     
-    struct _Edge : Hashable {
-        let start : ItemSet<R>
-        let symb : Expr<R.Term, R.NTerm>
-        let end : ItemSet<R>
-    }
-    
-    var states : [ItemSet<R>] = []
-    var edges : [Expr<R.Term, R.NTerm> : [Int : Int]] = [:]
+    let graph : ClosedGraph<ItemSet<R>>
     
     init(rules: R.Type) {
-        states.append(.init())
-        var newStates = states
-        var _states = Set(states)
-        var _edges = Set<_Edge>()
-        while true {
-            var newNewStates = [ItemSet<R>]()
-            var didSomething = false
-            for state in newStates {
-                for expr in R.Term.allCases.map(Expr.term) + R.NTerm.allCases.map(Expr.nonTerm) {
-                    for (symb, end) in state.nexts(expr) {
-                        if !_states.contains(end) {
-                            didSomething = true
-                            newNewStates.append(end)
-                            _states.insert(end)
-                        }
-                        let edge = _Edge(start: state, symb: symb, end: end)
-                        if !_edges.contains(edge) {
-                            didSomething = true
-                            _edges.insert(edge)
-                        }
-                    }
-                }
-            }
-            newStates = newNewStates
-            states.append(contentsOf: newStates)
-            if (!didSomething)
-            {
-                break
-            }
-        }
-        for _edge in _edges {
-            let start = states.firstIndex(of: _edge.start)!
-            let end = states.firstIndex(of: _edge.end)!
-            if edges[_edge.symb] == nil {
-                edges[_edge.symb] = [start: end]
-            }
-            else {
-                edges[_edge.symb]?[start] = end
-            }
-        }
+        let augmentedRule = Item<R>(rule: nil, [.nonTerm(R.goal)])
+        let itemSetGraph = ClosedGraph(seeds: [augmentedRule])
+        graph = ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
     }
     
-    func actionTable() throws -> [R.Term? : [Int : LR0Action<R>]] {
-        let keyAndVals = edges.compactMap{(key : Expr<R.Term, R.NTerm>, val : [Int : Int]) -> (R.Term, [Int : LR0Action<R>])? in
+    func actionTable() throws -> [R.Term? : [Int : Action<R>]] {
+        let keyAndVals = graph.edges.compactMap{(key : Expr<R.Term, R.NTerm>, vals : [Int : [Int]]) -> (R.Term, [Int : Action<R>])? in
             guard case .term(let t) = key else {return nil}
-            let dict = Dictionary(uniqueKeysWithValues: val.map{start, end in
-                (start, LR0Action<R>.shift(end))
+            let dict = Dictionary(uniqueKeysWithValues: vals.map{start, ends in
+                assert(ends.count == 1)
+                return (start, Action<R>.shift(ends.first!))
             })
             return (t, dict)
         }
-        var dict = Dictionary(uniqueKeysWithValues: keyAndVals) as [R.Term? : [Int : LR0Action<R>]]
-        for start in states.indices {
-            if let rule = try states[start].reduceRule() {
+        var dict = Dictionary(uniqueKeysWithValues: keyAndVals) as [R.Term? : [Int : Action<R>]]
+        for start in graph.nodes.indices {
+            if let rule = try graph.nodes[start].reduceRule() {
                 for term in Array(R.Term.allCases) as [R.Term?] + [nil] {
                     if dict[term] == nil {
                         dict[term] = [start: .reduce(rule)]
@@ -217,7 +93,7 @@ fileprivate struct ItemSetTable<R : Rules> {
                     }
                 }
             }
-            if states[start].rep.contains(where: {$0.rule == nil && $0.tbd.isEmpty}) {
+            if graph.nodes[start].graph.nodes.contains(where: {$0.rule == nil && $0.tbd.isEmpty}) {
                 if dict[nil] == nil {
                     dict[nil] = [start : .accept]
                 }
@@ -233,28 +109,20 @@ fileprivate struct ItemSetTable<R : Rules> {
     }
     
     var gotoTable : [R.NTerm : [Int : Int]] {
-        Dictionary(uniqueKeysWithValues: edges.compactMap{key, val in
+        Dictionary(uniqueKeysWithValues: graph.edges.compactMap{(key : Expr<R.Term, R.NTerm>, vals : [Int : [Int]]) in
             guard case .nonTerm(let nT) = key else {return nil}
-            return (nT, val)
+            return (nT, vals.mapValues{ints in
+                assert(ints.count == 1)
+                return ints.first!
+            })
         })
     }
     
 }
 
-public struct UndefinedState : Error {}
-public struct InvalidChar : Error {
-    public let char : Character
-}
-public struct NoGoTo<NT> : Error {
-    public let nonTerm : NT
-    public let state : Int
-}
-
-
-
 public struct LR0Parser<R : Rules> : Codable, Equatable {
     
-    public let actions : [R.Term? : [Int : LR0Action<R>]]
+    public let actions : [R.Term? : [Int : Action<R>]]
     public let gotos : [R.NTerm : [Int : Int]]
     
     public init(rules: R.Type) throws {
