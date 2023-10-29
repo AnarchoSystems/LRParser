@@ -36,9 +36,13 @@ public extension Parser {
                 guard let res = R.Term(rawValue: char) else {throw InvalidChar(char: char)}
                 return res
             }
-            guard let stateBefore = stateStack.peek() else {throw UndefinedState()}
+            guard let stateBefore = stateStack.peek() else {
+                throw UndefinedState()
+            }
             guard let dict = actions[term] else {throw InvalidChar(char: current ?? "$")}
-            guard let action = dict[stateBefore] else {throw UndefinedState()}
+            guard let action = dict[stateBefore] else {
+                throw UndefinedState()
+            }
             
             switch action {
                 
@@ -51,7 +55,9 @@ public extension Parser {
                 for _ in rule.rhs {
                     _ = stateStack.pop()
                 }
-                guard let stateAfter = stateStack.peek() else {throw UndefinedState()}
+                guard let stateAfter = stateStack.peek() else {
+                    throw UndefinedState()
+                }
                 try construction(reduce, &outStack)
                 guard let nextState = gotos[rule.lhs]?[stateAfter] else {throw NoGoTo(nonTerm: rule.lhs, state: stateAfter)}
                 stateStack.push(nextState)

@@ -1,32 +1,69 @@
 //
-//  Parser+LR0.swift
+//  Parser+CLR1.swift
 //
 //
 //  Created by Markus Kasperczyk on 28.10.23.
 //
 
-// MARK: LR(0) ITEMS
+// MARK: CLR(1) ITEMS
+
+fileprivate extension Rules {
+    static func first(_ expr: Expr<Term, NTerm>) -> Set<Term> {
+        switch expr {
+        case .term(let term):
+            return [term]
+        case .nonTerm(let nT):
+            var results : Set<Term> = []
+            var nTermsLookedAt : Set<NTerm> = []
+            var nTermsToLookAt : Set<NTerm> = [nT]
+            while !nTermsToLookAt.isEmpty {
+                var newNTermsToLookAt : Set<NTerm> = []
+                for nT in nTermsToLookAt {
+                    for rule in allCases.lazy.map(\.rule) where rule.lhs == nT {
+                        guard let next = rule.rhs.first else {continue}
+                        switch next {
+                        case .term(let term):
+                            results.insert(term)
+                        case .nonTerm(let newNT):
+                            if !nTermsLookedAt.contains(newNT) {
+                                newNTermsToLookAt.insert(newNT)
+                            }
+                        }
+                    }
+                }
+                nTermsLookedAt.formUnion(nTermsLookedAt)
+                nTermsToLookAt = newNTermsToLookAt
+            }
+            return results
+        }
+    }
+}
 
 fileprivate struct Item<R : Rules> : Node {
     
     let rule : R?
     let all : [Expr<R.Term, R.NTerm>]
+    let lookAheads : Set<R.Term?>
     let ptr : Int
     
     func canReach () -> [R.NTerm : [Item<R>]] {
         guard let next = tbd.first, case .nonTerm(let nT) = next else {
             return [:]
         }
+        var lookAheads = self.lookAheads
+        if let la = tbd.dropFirst().first {
+            lookAheads = R.first(la)
+        }
         return [nT : R.allCases.compactMap {rule in
             let ru = rule.rule
             guard ru.lhs == nT else {return nil}
-            return Item(rule: rule, all: ru.rhs, ptr: 0)
+            return Item(rule: rule, all: ru.rhs, lookAheads: lookAheads, ptr: 0)
         }]
     }
     
 }
 
-// MARK: LR(0) ITEM SETS
+// MARK: CLR(1) ITEM SETS
 
 fileprivate struct ItemSet<R : Rules> {
     
@@ -39,7 +76,7 @@ fileprivate struct ItemSet<R : Rules> {
 extension Item {
     
     func tryAdvance(_ expr: Expr<R.Term, R.NTerm>) -> Item<R>? {
-        tbd.first.flatMap{$0 == expr ? Item(rule: rule, all: all, ptr: ptr + 1) : nil}
+        tbd.first.flatMap{$0 == expr ? Item(rule: rule, all: all, lookAheads: lookAheads, ptr: ptr + 1) : nil}
     }
     var tbd : some Collection<Expr<R.Term, R.NTerm>> {
         all[ptr...]
@@ -51,25 +88,31 @@ extension ItemSet : Node {
     
     func canReach() throws -> [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
         let exprs = Set(graph.nodes.compactMap(\.tbd.first))
+        let terms = Set(exprs.compactMap{expr -> R.Term? in
+            guard case .term(let t) = expr else {return nil}
+            return t
+        }) as Set<R.Term?>
+        let rules = try reduceRules()
+        if !terms.intersection(rules.keys).isEmpty {
+            throw ShiftReduceConflict()
+        }
         if exprs.isEmpty {
-            _ = try reduceRule()
             return [:]
         }
-        guard try reduceRule() == nil else {throw ShiftReduceConflict()}
         return try Dictionary(uniqueKeysWithValues: exprs.map{expr in
             try (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}))])
         })
     }
 }
 
-// MARK: LR(0) GRAPH
+// MARK: CLR(1) GRAPH
 
 fileprivate struct ItemSetTable<R : Rules> {
     
     let graph : ClosedGraph<ItemSet<R>>
     
     init(rules: R.Type) throws {
-        let augmentedRule = Item<R>(rule: nil, all: [.nonTerm(R.goal)], ptr: 0)
+        let augmentedRule = Item<R>(rule: nil, all: [.nonTerm(R.goal)], lookAheads: [nil], ptr: 0)
         let itemSetGraph = try ClosedGraph(seeds: [augmentedRule])
         graph = try ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
     }
@@ -80,12 +123,9 @@ fileprivate struct ItemSetTable<R : Rules> {
 
 extension ItemSet {
     
-    func reduceRule() throws -> R? {
-        let results : [R] = graph.nodes.lazy.filter(\.tbd.isEmpty).compactMap(\.rule)
-        if results.count > 1 {
-            throw ReduceReduceConflict(matching: results)
-        }
-        return results.first
+    func reduceRules() throws -> [R.Term? : R] {
+        let results = graph.nodes.lazy.filter(\.tbd.isEmpty).flatMap{rule in rule.rule.map{val in rule.lookAheads.map{key in (key, val)}} ?? []}
+        return try Dictionary(results) {val1, val2 in throw ReduceReduceConflict(matching: [val1, val2])}
     }
     
     
@@ -114,17 +154,15 @@ extension ItemSetTable {
             
             // reductions
             
-            if let rule = try graph.nodes[start].reduceRule() {
-                for term in Array(R.Term.allCases) as [R.Term?] + [nil] {
-                    if dict[term] == nil {
-                        dict[term] = [start: .reduce(rule)]
+            for (term, rule) in try graph.nodes[start].reduceRules() {
+                if dict[term] == nil {
+                    dict[term] = [start: .reduce(rule)]
+                }
+                else {
+                    if dict[term]?[start] != nil {
+                        throw ShiftReduceConflict()
                     }
-                    else {
-                        if dict[term]?[start] != nil {
-                            throw ShiftReduceConflict()
-                        }
-                        dict[term]?[start] = .reduce(rule)
-                    }
+                    dict[term]?[start] = .reduce(rule)
                 }
             }
             
@@ -157,11 +195,11 @@ extension ItemSetTable {
     
 }
 
-// MARK: LR(0) PARSER
+// MARK: CLR(1) PARSER
 
 public extension Parser {
     
-    static func LR0(rules: R.Type) throws -> Self {
+    static func CLR1(rules: R.Type) throws -> Self {
         let table = try ItemSetTable(rules: rules)
         return Parser(actions: try table.actionTable(),
                       gotos: table.gotoTable)
