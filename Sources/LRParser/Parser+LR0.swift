@@ -13,7 +13,7 @@ fileprivate struct Item<R : Rules> : Node {
     let all : [Expr<R.Term, R.NTerm>]
     let ptr : Int
     
-    var canReach: [R.NTerm : [Item<R>]] {
+    func canReach () -> [R.NTerm : [Item<R>]] {
         guard let next = tbd.first, case .nonTerm(let nT) = next else {
             return [:]
         }
@@ -49,10 +49,15 @@ extension Item {
 
 extension ItemSet : Node {
     
-    var canReach: [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
+    func canReach() throws -> [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
         let exprs = Set(graph.nodes.compactMap(\.tbd.first))
-        return Dictionary(uniqueKeysWithValues: exprs.map{expr in
-            (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}))])
+        if exprs.isEmpty {
+            _ = try reduceRule()
+            return [:]
+        }
+        guard try reduceRule() == nil else {throw ShiftReduceConflict()}
+        return try Dictionary(uniqueKeysWithValues: exprs.map{expr in
+            try (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}))])
         })
     }
 }
@@ -63,10 +68,10 @@ fileprivate struct ItemSetTable<R : Rules> {
     
     let graph : ClosedGraph<ItemSet<R>>
     
-    init(rules: R.Type) {
+    init(rules: R.Type) throws {
         let augmentedRule = Item<R>(rule: nil, all: [.nonTerm(R.goal)], ptr: 0)
-        let itemSetGraph = ClosedGraph(seeds: [augmentedRule])
-        graph = ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
+        let itemSetGraph = try ClosedGraph(seeds: [augmentedRule])
+        graph = try ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
     }
     
 }
@@ -157,7 +162,7 @@ extension ItemSetTable {
 public extension Parser {
     
     static func LR0(rules: R.Type) throws -> Self {
-        let table = ItemSetTable(rules: rules)
+        let table = try ItemSetTable(rules: rules)
         return Parser(actions: try table.actionTable(),
                       gotos: table.gotoTable)
     }

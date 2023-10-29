@@ -7,7 +7,7 @@
 
 public protocol Node : Hashable {
     associatedtype Edge : Hashable
-    var canReach : [Edge: [Self]] {get}
+    func canReach() throws -> [Edge: [Self]]
 }
 
 public struct ClosedGraph<N : Node> : Hashable {
@@ -15,7 +15,7 @@ public struct ClosedGraph<N : Node> : Hashable {
     public let nodes : [N]
     public let edges : [N.Edge : [Int : [Int]]]
     
-    public init(seeds: [N]) {
+    public init(seeds: [N]) throws {
         
         // local variables so they're mutable
         var nodes = seeds
@@ -33,7 +33,7 @@ public struct ClosedGraph<N : Node> : Hashable {
             var didAddEdge = false
             
             for start in newNodes {
-                for (content, ends) in start.canReach {
+                for (content, ends) in try start.canReach() {
                     for end in ends {
                         
                         if !seenNodes.contains(end) {
