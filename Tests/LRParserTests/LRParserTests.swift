@@ -1,5 +1,5 @@
 import XCTest
-@testable import LRParser
+import LRParser
 
 final class LRParserTests: XCTestCase {
     

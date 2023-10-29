@@ -10,16 +10,16 @@ public struct Stack<T> {
     var rep : [T] = []
     public init() {}
     
-    mutating func push(_ t: T) {
+    public mutating func push(_ t: T) {
         rep.append(t)
     }
     
-    mutating func pop() -> T? {
+    public mutating func pop() -> T? {
         guard peek() != nil else {return nil}
         return rep.removeLast()
     }
     
-    func peek() -> T? {
+    public func peek() -> T? {
         rep.last
     }
     

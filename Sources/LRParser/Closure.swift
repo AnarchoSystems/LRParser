@@ -17,14 +17,18 @@ public struct ClosedGraph<N : Node> : Hashable {
     
     public init(seeds: [N]) {
         
+        // local variables so they're mutable
         var nodes = seeds
+        var edges : [N.Edge : [N : Set<N>]] = [:]
+        
+        // we need these to keep track of nodes to expand
         var newNodes = seeds
         var seenNodes : Set<N> = Set(seeds)
         
-        var edges : [N.Edge : [N : Set<N>]] = [:]
         
         while true {
             
+            // we need these to keep track if there are *next* nodes to expand or any edges that were added
             var newNewNodes : [N] = []
             var didAddEdge = false
             
@@ -60,6 +64,8 @@ public struct ClosedGraph<N : Node> : Hashable {
         }
         
         self.nodes = nodes
+        
+        // every edge must now begin and end at a node in the nodes array
         self.edges = edges.mapValues{dict in
             Dictionary(uniqueKeysWithValues: dict.map{key, vals in (nodes.firstIndex(of: key)!,
                                                                     vals.map{nodes.firstIndex(of: $0)!})})

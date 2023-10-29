@@ -5,23 +5,14 @@
 //  Created by Markus Kasperczyk on 28.10.23.
 //
 
+// MARK: LR(0) ITEMS
+
 fileprivate struct Item<R : Rules> : Node {
+    
     let rule : R?
-    private let all : [Expr<R.Term, R.NTerm>]
-    private let ptr : Int
-    private init(rule: R?, _ all: [Expr<R.Term, R.NTerm>], ptr: Int) {
-        self.rule = rule
-        self.all = all
-        self.ptr = ptr
-    }
-    func tryAdvance(_ expr: Expr<R.Term, R.NTerm>) -> Item<R>? {
-        tbd.first.flatMap{$0 == expr ? Item(rule: rule, all, ptr: ptr + 1) : nil}
-    }
-    init(rule: R?, _ all: [Expr<R.Term, R.NTerm>]) {
-        self.rule = rule
-        self.all = all
-        self.ptr = 0
-    }
+    let all : [Expr<R.Term, R.NTerm>]
+    let ptr : Int
+    
     var canReach: [R.NTerm : [Item<R>]] {
         guard let next = tbd.first, case .nonTerm(let nT) = next else {
             return [:]
@@ -29,8 +20,26 @@ fileprivate struct Item<R : Rules> : Node {
         return [nT : R.allCases.compactMap {rule in
             let ru = rule.rule
             guard ru.lhs == nT else {return nil}
-            return Item(rule: rule, ru.rhs)
+            return Item(rule: rule, all: ru.rhs, ptr: 0)
         }]
+    }
+    
+}
+
+// MARK: LR(0) ITEM SETS
+
+fileprivate struct ItemSet<R : Rules> {
+    
+    let graph : ClosedGraph<Item<R>>
+    
+}
+
+// MARK: HELPERS
+
+extension Item {
+    
+    func tryAdvance(_ expr: Expr<R.Term, R.NTerm>) -> Item<R>? {
+        tbd.first.flatMap{$0 == expr ? Item(rule: rule, all: all, ptr: ptr + 1) : nil}
     }
     var tbd : some Collection<Expr<R.Term, R.NTerm>> {
         all[ptr...]
@@ -38,9 +47,7 @@ fileprivate struct Item<R : Rules> : Node {
     
 }
 
-fileprivate struct ItemSet<R : Rules> : Node {
-    
-    let graph : ClosedGraph<Item<R>>
+extension ItemSet : Node {
     
     var canReach: [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
         let exprs = Set(graph.nodes.compactMap(\.tbd.first))
@@ -48,6 +55,25 @@ fileprivate struct ItemSet<R : Rules> : Node {
             (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}))])
         })
     }
+}
+
+// MARK: LR(0) GRAPH
+
+fileprivate struct ItemSetTable<R : Rules> {
+    
+    let graph : ClosedGraph<ItemSet<R>>
+    
+    init(rules: R.Type) {
+        let augmentedRule = Item<R>(rule: nil, all: [.nonTerm(R.goal)], ptr: 0)
+        let itemSetGraph = ClosedGraph(seeds: [augmentedRule])
+        graph = ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
+    }
+    
+}
+
+// MARK: HELPER
+
+extension ItemSet {
     
     func reduceRule() throws -> R? {
         let results : [R] = graph.nodes.lazy.filter(\.tbd.isEmpty).compactMap(\.rule)
@@ -57,19 +83,17 @@ fileprivate struct ItemSet<R : Rules> : Node {
         return results.first
     }
     
+    
 }
 
-fileprivate struct ItemSetTable<R : Rules> {
-    
-    let graph : ClosedGraph<ItemSet<R>>
-    
-    init(rules: R.Type) {
-        let augmentedRule = Item<R>(rule: nil, [.nonTerm(R.goal)])
-        let itemSetGraph = ClosedGraph(seeds: [augmentedRule])
-        graph = ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
-    }
+// MARK: ACTION + GOTO TABLES
+
+extension ItemSetTable {
     
     func actionTable() throws -> [R.Term? : [Int : Action<R>]] {
+        
+        // shifts
+        
         let keyAndVals = graph.edges.compactMap{(key : Expr<R.Term, R.NTerm>, vals : [Int : [Int]]) -> (R.Term, [Int : Action<R>])? in
             guard case .term(let t) = key else {return nil}
             let dict = Dictionary(uniqueKeysWithValues: vals.map{start, ends in
@@ -78,8 +102,13 @@ fileprivate struct ItemSetTable<R : Rules> {
             })
             return (t, dict)
         }
+        
         var dict = Dictionary(uniqueKeysWithValues: keyAndVals) as [R.Term? : [Int : Action<R>]]
+        
         for start in graph.nodes.indices {
+            
+            // reductions
+            
             if let rule = try graph.nodes[start].reduceRule() {
                 for term in Array(R.Term.allCases) as [R.Term?] + [nil] {
                     if dict[term] == nil {
@@ -93,6 +122,9 @@ fileprivate struct ItemSetTable<R : Rules> {
                     }
                 }
             }
+            
+            // accepts
+            
             if graph.nodes[start].graph.nodes.contains(where: {$0.rule == nil && $0.tbd.isEmpty}) {
                 if dict[nil] == nil {
                     dict[nil] = [start : .accept]
@@ -120,6 +152,8 @@ fileprivate struct ItemSetTable<R : Rules> {
     
 }
 
+// MARK: LR(0) PARSER
+
 public struct LR0Parser<R : Rules> : Codable, Equatable {
     
     public let actions : [R.Term? : [Int : Action<R>]]
@@ -130,6 +164,10 @@ public struct LR0Parser<R : Rules> : Codable, Equatable {
         self.actions = try table.actionTable()
         self.gotos = table.gotoTable
     }
+    
+}
+
+public extension LR0Parser {
     
     func parse<Out>(_ stream: String, do construction: (R, inout Stack<Out>) throws -> Void) throws ->Stack<Out> {
         
