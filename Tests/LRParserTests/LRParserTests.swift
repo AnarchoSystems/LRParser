@@ -69,7 +69,7 @@ enum MyRules : String, Constructions {
                 guard let eb = stack.pop(),
                       let b = eb.asB,
                       let e = stack.pop() else {
-                    throw "Menno"
+                    throw "Ouch"
                 }
                 stack.push(.times(e, b))
             }
@@ -78,7 +78,7 @@ enum MyRules : String, Constructions {
                 guard let eb = stack.pop(),
                       let b = eb.asB,
                       let e = stack.pop() else {
-                    throw "Menno"
+                    throw "Ouch"
                 }
                 stack.push(.plus(e, b))
             }
@@ -86,7 +86,7 @@ enum MyRules : String, Constructions {
             Construction(.E, expression: /.B) {stack in
                 guard let eb = stack.peek(),
                       nil != eb.asB else {
-                    throw "Menno"
+                    throw "Ouch"
                 }
             }
         case .bZero:
