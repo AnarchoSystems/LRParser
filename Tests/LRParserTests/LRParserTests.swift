@@ -31,10 +31,6 @@ final class LRParserTests: XCTestCase {
     
     func testCLR1() throws {
         let parser = try Parser.CLR1(rules: CLR1Rules.self)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        let data = try encoder.encode(parser)
-        print(String(data: data, encoding: .utf8)!)
         XCTAssertNoThrow(try parser.buildStack("aabaaab"))
     }
     

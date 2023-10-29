@@ -8,19 +8,22 @@
 // MARK: CLR(1) ITEMS
 
 fileprivate extension Rules {
-    static func first(_ expr: Expr<Term, NTerm>) -> Set<Term> {
+    static func first(_ expr: Expr<Term, NTerm>) -> Set<Term?> {
         switch expr {
         case .term(let term):
             return [term]
         case .nonTerm(let nT):
-            var results : Set<Term> = []
+            var results : Set<Term?> = []
             var nTermsLookedAt : Set<NTerm> = []
             var nTermsToLookAt : Set<NTerm> = [nT]
             while !nTermsToLookAt.isEmpty {
                 var newNTermsToLookAt : Set<NTerm> = []
                 for nT in nTermsToLookAt {
                     for rule in allCases.lazy.map(\.rule) where rule.lhs == nT {
-                        guard let next = rule.rhs.first else {continue}
+                        guard let next = rule.rhs.first else {
+                            results.insert(nil)
+                            continue
+                        }
                         switch next {
                         case .term(let term):
                             results.insert(term)
