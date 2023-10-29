@@ -5,7 +5,7 @@
 //  Created by Markus Kasperczyk on 28.10.23.
 //
 
-// MARK: CLR(1) ITEMS
+// MARK: FIRST
 
 fileprivate extension Rules {
     static func first(_ expr: Expr<Term, NTerm>) -> Set<Term?> {
@@ -41,6 +41,8 @@ fileprivate extension Rules {
         }
     }
 }
+
+// MARK: CLR(1) ITEMS
 
 fileprivate struct Item<R : Rules> : Node {
     

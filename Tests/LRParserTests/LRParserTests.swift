@@ -34,9 +34,35 @@ final class LRParserTests: XCTestCase {
         XCTAssertNoThrow(try parser.buildStack("aabaaab"))
     }
     
+    func testLL() {
+        XCTAssertNoThrow(try Parser.LR0(rules: NonLL.self))
+    }
+    
 }
 
 // examples from https://en.wikipedia.org/wiki/LR_parser#Additional_example_1+1
+
+enum NonLLTerminal : Character, Terminal {
+    case a = "a"
+}
+
+enum NonLLNTerminal : String, NonTerminal {
+    case A
+}
+
+enum NonLL : String, Rules {
+    case ouch
+    case term
+    static var goal : NonLLNTerminal {.A}
+    var rule : Rule<NonLLTerminal, NonLLNTerminal> {
+        switch self {
+        case .ouch:
+            Rule(.A, expression: /.A, /.a)
+        case .term:
+            Rule(.A, expression: /.a)
+        }
+    }
+}
 
 enum MyTerm : Character, Terminal {
     case zero = "0"
