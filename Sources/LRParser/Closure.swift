@@ -30,7 +30,6 @@ public struct ClosedGraph<N : Node> : Hashable {
             
             // we need these to keep track if there are *next* nodes to expand or any edges that were added
             var newNewNodes : [N] = []
-            var didAddEdge = false
             
             for start in newNodes {
                 for (content, ends) in try start.canReach() {
@@ -42,22 +41,19 @@ public struct ClosedGraph<N : Node> : Hashable {
                         }
                         if edges[content] == nil {
                             edges[content] = [start : [end]]
-                            didAddEdge = true
                         }
                         else if edges[content]![start] == nil {
                             edges[content]![start] = [end]
-                            didAddEdge = true
                         }
                         else {
-                            let (didAdd, _) = edges[content]![start]!.insert(end)
-                            didAddEdge = didAddEdge || didAdd
+                            edges[content]![start]!.insert(end)
                         }
                     }
                 }
             }
             
             newNodes = newNewNodes
-            if newNodes.isEmpty && !didAddEdge {
+            if newNodes.isEmpty {
                 break
             }
             nodes.append(contentsOf: newNodes)

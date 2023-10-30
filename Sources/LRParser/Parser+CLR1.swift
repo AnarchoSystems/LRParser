@@ -34,7 +34,7 @@ fileprivate extension Rules {
                         }
                     }
                 }
-                nTermsLookedAt.formUnion(nTermsLookedAt)
+                nTermsLookedAt.formUnion(nTermsToLookAt)
                 nTermsToLookAt = newNTermsToLookAt
             }
             return results
@@ -50,6 +50,7 @@ fileprivate struct Item<R : Rules> : Node {
     let all : [Expr<R.Term, R.NTerm>]
     let lookAheads : Set<R.Term?>
     let ptr : Int
+    let firsts : [Expr<R.Term, R.NTerm> : Set<R.Term?>]
     
     func canReach () -> [R.NTerm : [Item<R>]] {
         guard let next = tbd.first, case .nonTerm(let nT) = next else {
@@ -57,12 +58,12 @@ fileprivate struct Item<R : Rules> : Node {
         }
         var lookAheads = self.lookAheads
         if let la = tbd.dropFirst().first {
-            lookAheads = R.first(la)
+            lookAheads = firsts[la]!
         }
         return [nT : R.allCases.compactMap {rule in
             let ru = rule.rule
             guard ru.lhs == nT else {return nil}
-            return Item(rule: rule, all: ru.rhs, lookAheads: lookAheads, ptr: 0)
+            return Item(rule: rule, all: ru.rhs, lookAheads: lookAheads, ptr: 0, firsts: firsts)
         }]
     }
     
@@ -81,7 +82,7 @@ fileprivate struct ItemSet<R : Rules> {
 extension Item {
     
     func tryAdvance(_ expr: Expr<R.Term, R.NTerm>) -> Item<R>? {
-        tbd.first.flatMap{$0 == expr ? Item(rule: rule, all: all, lookAheads: lookAheads, ptr: ptr + 1) : nil}
+        tbd.first.flatMap{$0 == expr ? Item(rule: rule, all: all, lookAheads: lookAheads, ptr: ptr + 1, firsts: firsts) : nil}
     }
     var tbd : some Collection<Expr<R.Term, R.NTerm>> {
         all[ptr...]
@@ -117,7 +118,10 @@ fileprivate struct ItemSetTable<R : Rules> {
     let graph : ClosedGraph<ItemSet<R>>
     
     init(rules: R.Type) throws {
-        let augmentedRule = Item<R>(rule: nil, all: [.nonTerm(R.goal)], lookAheads: [nil], ptr: 0)
+        let augmentedRule = Item<R>(rule: nil, all: [.nonTerm(R.goal)],
+                                    lookAheads: [nil],
+                                    ptr: 0,
+                                    firsts: Dictionary(uniqueKeysWithValues: R.Term.allCases.map(Expr.term).map{($0, R.first($0))} + R.NTerm.allCases.map(Expr.nonTerm).map{($0, R.first($0))}))
         let itemSetGraph = try ClosedGraph(seeds: [augmentedRule])
         graph = try ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
     }
@@ -130,7 +134,12 @@ extension ItemSet {
     
     func reduceRules() throws -> [R.Term? : R] {
         let results = graph.nodes.lazy.filter(\.tbd.isEmpty).flatMap{rule in rule.rule.map{val in rule.lookAheads.map{key in (key, val)}} ?? []}
-        return try Dictionary(results) {val1, val2 in throw ReduceReduceConflict(matching: [val1, val2])}
+        return try Dictionary(results) {val1, val2 in
+            if val1 == val2 {
+                return val1
+            }
+            throw ReduceReduceConflict(matching: [val1, val2])
+        }
     }
     
     
