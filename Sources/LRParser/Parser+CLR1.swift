@@ -52,19 +52,24 @@ fileprivate struct Item<R : Rules> : Node {
     let ptr : Int
     let firsts : [Expr<R.Term, R.NTerm> : Set<R.Term?>]
     
-    func canReach () -> [R.NTerm : [Item<R>]] {
+    func canReach (lookup: inout [Self : [R.NTerm : [Item<R>]]]) -> [R.NTerm : [Item<R>]] {
+        if let result = lookup[self] {
+            return result
+        }
         guard let next = tbd.first, case .nonTerm(let nT) = next else {
+            lookup[self] = [:]
             return [:]
         }
         var lookAheads = self.lookAheads
         if let la = tbd.dropFirst().first {
             lookAheads = firsts[la]!
         }
-        return [nT : R.allCases.compactMap {rule in
+        lookup[self] = [nT : R.allCases.compactMap {rule in
             let ru = rule.rule
             guard ru.lhs == nT else {return nil}
             return Item(rule: rule, all: ru.rhs, lookAheads: lookAheads, ptr: 0, firsts: firsts)
         }]
+        return lookup[self]!
     }
     
 }
@@ -92,7 +97,16 @@ extension Item {
 
 extension ItemSet : Node {
     
-    func canReach() throws -> [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
+    struct Lookup {
+        var nodeLookup : Item<R>.Lookup
+        var seedLookup : [[Item<R>] : ItemSet<R>]
+        var selfLookup : [ItemSet : [Expr<R.Term, R.NTerm> : [ItemSet<R>]]]
+    }
+    
+    func canReach(lookup: inout Lookup) throws -> [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
+        if let result = lookup.selfLookup[self] {
+            return result
+        }
         let exprs = Set(graph.nodes.compactMap(\.tbd.first))
         let terms = Set(exprs.compactMap{expr -> R.Term? in
             guard case .term(let t) = expr else {return nil}
@@ -103,11 +117,20 @@ extension ItemSet : Node {
             throw ShiftReduceConflict()
         }
         if exprs.isEmpty {
-            return [:]
+            lookup.selfLookup[self] = [:]
         }
-        return try Dictionary(uniqueKeysWithValues: exprs.map{expr in
-            try (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}))])
-        })
+        else {
+            lookup.selfLookup[self] = try Dictionary(uniqueKeysWithValues: exprs.map{expr in
+                let seeds = graph.nodes.compactMap{$0.tryAdvance(expr)}
+                if let result = lookup.seedLookup[seeds] {
+                    return (expr, [result])
+                }
+                let result = try ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}, lookup: &lookup.nodeLookup))
+                lookup.seedLookup[seeds] = result
+                return (expr, [result])
+            })
+        }
+        return lookup.selfLookup[self]!
     }
 }
 
@@ -122,8 +145,9 @@ fileprivate struct ItemSetTable<R : Rules> {
                                     lookAheads: [nil],
                                     ptr: 0,
                                     firsts: Dictionary(uniqueKeysWithValues: R.Term.allCases.map(Expr.term).map{($0, R.first($0))} + R.NTerm.allCases.map(Expr.nonTerm).map{($0, R.first($0))}))
-        let itemSetGraph = try ClosedGraph(seeds: [augmentedRule])
-        graph = try ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
+        var lookup = ItemSet<R>.Lookup(nodeLookup: [:], seedLookup: [:], selfLookup: [:])
+        let itemSetGraph = try ClosedGraph(seeds: [augmentedRule], lookup: &lookup.nodeLookup)
+        graph = try ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)], lookup: &lookup)
     }
     
 }

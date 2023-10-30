@@ -13,7 +13,7 @@ fileprivate struct Item<R : Rules> : Node {
     let all : [Expr<R.Term, R.NTerm>]
     let ptr : Int
     
-    func canReach () -> [R.NTerm : [Item<R>]] {
+    func canReach (lookup: inout Void) -> [R.NTerm : [Item<R>]] {
         guard let next = tbd.first, case .nonTerm(let nT) = next else {
             return [:]
         }
@@ -49,7 +49,7 @@ extension Item {
 
 extension ItemSet : Node {
     
-    func canReach() throws -> [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
+    func canReach(lookup: inout Void) throws -> [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
         let exprs = Set(graph.nodes.compactMap(\.tbd.first))
         if exprs.isEmpty {
             _ = try reduceRule()
@@ -57,7 +57,7 @@ extension ItemSet : Node {
         }
         guard try reduceRule() == nil else {throw ShiftReduceConflict()}
         return try Dictionary(uniqueKeysWithValues: exprs.map{expr in
-            try (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}))])
+            try (expr, [ItemSet(graph: ClosedGraph(seeds: graph.nodes.compactMap{$0.tryAdvance(expr)}, lookup: &lookup))])
         })
     }
 }
@@ -70,8 +70,9 @@ fileprivate struct ItemSetTable<R : Rules> {
     
     init(rules: R.Type) throws {
         let augmentedRule = Item<R>(rule: nil, all: [.nonTerm(R.goal)], ptr: 0)
-        let itemSetGraph = try ClosedGraph(seeds: [augmentedRule])
-        graph = try ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)])
+        var void: () = ()
+        let itemSetGraph = try ClosedGraph(seeds: [augmentedRule], lookup: &void)
+        graph = try ClosedGraph(seeds: [ItemSet(graph: itemSetGraph)], lookup: &void)
     }
     
 }

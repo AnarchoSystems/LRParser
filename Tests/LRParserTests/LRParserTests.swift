@@ -41,12 +41,11 @@ final class LRParserTests: XCTestCase {
     func testGrammar() throws {
         XCTAssertThrowsError(try Parser.LR0(rules: Grammar.self))
         let parser = try Parser.CLR1(rules: Grammar.self)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        let data = try encoder.encode(parser)
-        print(String(data: data, encoding: .utf8)!)
         XCTAssertNoThrow(try parser.buildStack("Foo"))
         XCTAssertNoThrow(try parser.buildStack("Bar1345"))
+        XCTAssertNoThrow(try parser.buildStack("1234543234543254323456543"))
+        XCTAssertThrowsError(try parser.buildStack("5465423564a"))
+        XCTAssertThrowsError(try parser.buildStack("0142565432364"))
     }
     
 }
