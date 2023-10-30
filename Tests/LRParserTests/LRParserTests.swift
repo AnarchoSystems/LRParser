@@ -211,6 +211,8 @@ enum CLR1Rules : String, Rules {
     }
 }
 
+// bigger example
+
 enum Grammar : String, Constructions {
     
     typealias Term = Terminals
