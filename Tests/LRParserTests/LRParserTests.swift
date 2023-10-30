@@ -46,6 +46,7 @@ final class LRParserTests: XCTestCase {
         XCTAssertNoThrow(try parser.buildStack("1234543234543254323456543"))
         XCTAssertThrowsError(try parser.buildStack("5465423564a"))
         XCTAssertThrowsError(try parser.buildStack("0142565432364"))
+        try XCTAssertEqual(parser.parse("654324565432345"), .int(654324565432345))
     }
     
 }
@@ -491,7 +492,7 @@ enum Grammar : String, Constructions {
     
 }
 
-enum IdOrInt {
+enum IdOrInt : Equatable {
     case id(String)
     case int(Int)
 }
