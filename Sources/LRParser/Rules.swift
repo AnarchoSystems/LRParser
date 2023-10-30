@@ -41,3 +41,23 @@ public struct Rule<T : Terminal, NT : NonTerminal> {
         self.rhs = rhs
     }
 }
+
+public extension Rules {
+    
+    var printed : String {
+        let rule = self.rule
+        return rawValue + ":\n\t" + rule.lhs.rawValue + " -> " + rule.rhs.map{
+            switch $0 {
+            case .term(let term):
+                return "\'\(term.rawValue)\'"
+            case .nonTerm(let nonTerm):
+                return "<\(nonTerm.rawValue)>"
+            }
+        }.joined(separator: " ")
+    }
+    
+    static var printed : String {
+        allCases.lazy.map(\.printed).joined(separator: "\n")
+    }
+    
+}
