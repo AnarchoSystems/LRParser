@@ -36,7 +36,7 @@ public struct Rule<T : Terminal, NT : NonTerminal> {
         self.lhs = lhs
         self.rhs = rhs
     }
-    init(_ lhs: NT, rhs: [Expr<T, NT>]) {
+    public init(_ lhs: NT, rhs: [Expr<T, NT>]) {
         self.lhs = lhs
         self.rhs = rhs
     }

@@ -9,9 +9,17 @@ public struct ShiftReduceConflict : Error {}
 
 public struct AcceptConflict : Error {}
 
-public struct UndefinedState : Error {}
+public struct UndefinedState : Error {
+    let position : String.Index
+}
+
+public struct UnexpectedChar : Error {
+    public let char : Character?
+    public let expecting : Set<String>
+}
 
 public struct InvalidChar : Error {
+    let position : String.Index
     public let char : Character
 }
 

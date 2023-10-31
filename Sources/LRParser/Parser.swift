@@ -18,12 +18,41 @@ public struct Parser<R : Rules> : Codable, Equatable {
     
 }
 
+private extension Parser {
+    
+    func gatherExeptionData(_ state: Int, current: R.Term?) -> Error {
+        var nonTerms = Set<R.NTerm>()
+        var nextStates : Set<Int> = [state]
+        while !nextStates.isEmpty {
+            var nextNextStates : Set<Int> = []
+            for ns in nextStates {
+                let actions = self.actions.compactMap({ (key: R.Term?, value: [Int : Action<R>]) in
+                    value[ns].map{(key, $0)}
+                })
+                for (_, action) in actions {
+                    switch action {
+                    case .shift(let int):
+                        nextNextStates.insert(int)
+                    case .reduce(let r):
+                        nonTerms.insert(r.rule.lhs)
+                    case .accept:
+                        continue
+                    }
+                }
+            }
+            nextStates = nextNextStates
+        }
+        return UnexpectedChar(char: current?.rawValue, expecting: Set(nonTerms.map(\.rawValue)))
+    }
+    
+}
+
 public extension Parser {
     
     func parse<Out>(_ stream: String, do construction: (R, inout Stack<Out>) throws -> Void) throws ->Stack<Out> {
         
-        var iterator = stream.makeIterator()
-        var current = iterator.next()
+        var index = stream.startIndex
+        var current = stream.first
         
         var stateStack = Stack<Int>()
         stateStack.push(0)
@@ -34,25 +63,32 @@ public extension Parser {
             
             let term = try current.map{char in
                 guard let res = R.Term(rawValue: char) else {
-                    throw InvalidChar(char: char)
+                    throw InvalidChar(position: index, char: char)
                 }
                 return res
             }
             guard let stateBefore = stateStack.peek() else {
-                throw UndefinedState()
+                throw UndefinedState(position: index)
             }
             guard let dict = actions[term] else {
-                throw InvalidChar(char: current ?? "$")
+                throw InvalidChar(position: index, char: current ?? "$")
             }
             guard let action = dict[stateBefore] else {
-                throw UndefinedState()
+                var parent = stateBefore
+                while let p = stateStack.pop() {
+                    if nil != stateStack.peek() {
+                        parent = p
+                    }
+                }
+                throw gatherExeptionData(parent, current: term)
             }
             
             switch action {
                 
             case .shift(let shift):
                 stateStack.push(shift)
-                current = iterator.next()
+                index = stream.index(after: index)
+                current = stream.indices.contains(index) ? stream[index] : nil
                 
             case .reduce(let reduce):
                 let rule = reduce.rule
@@ -60,7 +96,7 @@ public extension Parser {
                     _ = stateStack.pop()
                 }
                 guard let stateAfter = stateStack.peek() else {
-                    throw UndefinedState()
+                    throw UndefinedState(position: index)
                 }
                 try construction(reduce, &outStack)
                 guard let nextState = gotos[rule.lhs]?[stateAfter] else {throw NoGoTo(nonTerm: rule.lhs, state: stateAfter)}
@@ -90,7 +126,7 @@ public extension Parser {
                     children.append(.leave(terminal: t))
                 case .nonTerm(let nT):
                     guard let pop = stack.pop() else {
-                        throw UndefinedState()
+                        throw StackIsEmpty(rule: rule)
                     }
                     children.append(.ast(ast: pop, variable: nT))
                 }
@@ -107,4 +143,8 @@ public extension Parser {
         return stack.pop()
     }
     
+}
+
+public struct StackIsEmpty<R: Rules> : Error {
+    public let rule : R
 }

@@ -26,12 +26,12 @@ final class LRParserTests: XCTestCase {
     
     func testOnes() throws {
         let parser = try Parser.CLR1(rules: NonLR0.self)
-        XCTAssertNoThrow(try parser.buildStack("111111"))
+        XCTAssertNoThrow(try parser.buildAST("111111"))
     }
     
     func testCLR1() throws {
         let parser = try Parser.CLR1(rules: CLR1Rules.self)
-        XCTAssertNoThrow(try parser.buildStack("aabaaab"))
+        XCTAssertNoThrow(try parser.buildAST("aabaaab"))
     }
     
     func testLL() {
@@ -41,12 +41,11 @@ final class LRParserTests: XCTestCase {
     func testGrammar() throws {
         XCTAssertThrowsError(try Parser.LR0(rules: Grammar.self))
         let parser = try Parser.CLR1(rules: Grammar.self)
-        XCTAssertNoThrow(try parser.buildStack("Foo"))
-        XCTAssertNoThrow(try parser.buildStack("Bar1345"))
-        XCTAssertNoThrow(try parser.buildStack("1234543234543254323456543"))
-        XCTAssertThrowsError(try parser.buildStack("5465423564a"))
-        XCTAssertThrowsError(try parser.buildStack("0142565432364"))
-        try XCTAssertEqual(parser.parse("654324565432345"), .int(654324565432345))
+        XCTAssertNoThrow(try parser.buildAST("Foo"))
+        XCTAssertNoThrow(try parser.buildAST("Bar1345"))
+        XCTAssertNoThrow(try parser.buildAST("102345432345432543234565403"))
+        XCTAssertThrowsError(try parser.buildAST("5465423564a"))
+        XCTAssertThrowsError(try parser.buildAST("0142565432364"))
     }
     
 }
@@ -214,11 +213,10 @@ enum CLR1Rules : String, Rules {
 
 // bigger example
 
-enum Grammar : String, Constructions {
+enum Grammar : String, Rules {
     
     typealias Term = Terminals
     typealias NTerm = NonTerminals
-    typealias Output = IdOrInt
     
     static var goal: NonTerminals {
         .intOrId
@@ -252,249 +250,183 @@ enum Grammar : String, Constructions {
          letterDigitOrLetter,
          
          letterId,
-         idDigitOrLetterId,
+         letterDigitsOrLettersId,
          
          idIntOrId,
          intIntOrId
     
-    var construction: Construction<Terminals, NonTerminals, Output> {
+    var rule: Rule<Terminals, NonTerminals> {
         switch self {
         case .aLower:
-            Construction(.lowercaseLetter, expression: /.a) {stack in stack.push(.id("a"))}
+            Rule(.lowercaseLetter, expression: /.a)
         case .AUpper:
-            Construction(.uppercaseLetter, expression: /.A) {stack in stack.push(.id("A"))}
+            Rule(.uppercaseLetter, expression: /.A)
         case .bLower:
-            Construction(.lowercaseLetter, expression: /.b) {stack in stack.push(.id("b"))}
+            Rule(.lowercaseLetter, expression: /.b)
         case .BUpper:
-            Construction(.uppercaseLetter, expression: /.B) {stack in stack.push(.id("B"))}
+            Rule(.uppercaseLetter, expression: /.B)
         case .cLower:
-            Construction(.lowercaseLetter, expression: /.c) {stack in stack.push(.id("c"))}
+            Rule(.lowercaseLetter, expression: /.c)
         case .CUpper:
-            Construction(.uppercaseLetter, expression: /.C) {stack in stack.push(.id("C"))}
+            Rule(.uppercaseLetter, expression: /.C)
         case .dLower:
-            Construction(.lowercaseLetter, expression: /.d) {stack in stack.push(.id("d"))}
+            Rule(.lowercaseLetter, expression: /.d)
         case .DUpper:
-            Construction(.uppercaseLetter, expression: /.D) {stack in stack.push(.id("D"))}
+            Rule(.uppercaseLetter, expression: /.D)
         case .eLower:
-            Construction(.lowercaseLetter, expression: /.e) {stack in stack.push(.id("e"))}
+            Rule(.lowercaseLetter, expression: /.e)
         case .EUpper:
-            Construction(.uppercaseLetter, expression: /.E) {stack in stack.push(.id("E"))}
+            Rule(.uppercaseLetter, expression: /.E)
         case .fLower:
-            Construction(.lowercaseLetter, expression: /.f) {stack in stack.push(.id("f"))}
+            Rule(.lowercaseLetter, expression: /.f)
         case .FUpper:
-            Construction(.uppercaseLetter, expression: /.F) {stack in stack.push(.id("F"))}
+            Rule(.uppercaseLetter, expression: /.F)
         case .gLower:
-            Construction(.lowercaseLetter, expression: /.g) {stack in stack.push(.id("g"))}
+            Rule(.lowercaseLetter, expression: /.g)
         case .GUpper:
-            Construction(.uppercaseLetter, expression: /.G) {stack in stack.push(.id("G"))}
+            Rule(.uppercaseLetter, expression: /.G)
         case .hLower:
-            Construction(.lowercaseLetter, expression: /.h) {stack in stack.push(.id("h"))}
+            Rule(.lowercaseLetter, expression: /.h)
         case .HUpper:
-            Construction(.uppercaseLetter, expression: /.H) {stack in stack.push(.id("H"))}
+            Rule(.uppercaseLetter, expression: /.H)
         case .iLower:
-            Construction(.lowercaseLetter, expression: /.i) {stack in stack.push(.id("i"))}
+            Rule(.lowercaseLetter, expression: /.i)
         case .IUpper:
-            Construction(.uppercaseLetter, expression: /.I) {stack in stack.push(.id("I"))}
+            Rule(.uppercaseLetter, expression: /.I)
         case .jLower:
-            Construction(.lowercaseLetter, expression: /.j) {stack in stack.push(.id("j"))}
+            Rule(.lowercaseLetter, expression: /.j)
         case .JUpper:
-            Construction(.uppercaseLetter, expression: /.J) {stack in stack.push(.id("J"))}
+            Rule(.uppercaseLetter, expression: /.J)
         case .kLower:
-            Construction(.lowercaseLetter, expression: /.k) {stack in stack.push(.id("k"))}
+            Rule(.lowercaseLetter, expression: /.k)
         case .KUpper:
-            Construction(.uppercaseLetter, expression: /.K) {stack in stack.push(.id("K"))}
+            Rule(.uppercaseLetter, expression: /.K)
         case .lLower:
-            Construction(.lowercaseLetter, expression: /.l) {stack in stack.push(.id("l"))}
+            Rule(.lowercaseLetter, expression: /.l)
         case .LUpper:
-            Construction(.uppercaseLetter, expression: /.L) {stack in stack.push(.id("L"))}
+            Rule(.uppercaseLetter, expression: /.L)
         case .mLower:
-            Construction(.lowercaseLetter, expression: /.m) {stack in stack.push(.id("m"))}
+            Rule(.lowercaseLetter, expression: /.m)
         case .MUpper:
-            Construction(.uppercaseLetter, expression: /.M) {stack in stack.push(.id("M"))}
+            Rule(.uppercaseLetter, expression: /.M)
         case .nLower:
-            Construction(.lowercaseLetter, expression: /.n) {stack in stack.push(.id("n"))}
+            Rule(.lowercaseLetter, expression: /.n)
         case .NUpper:
-            Construction(.uppercaseLetter, expression: /.N) {stack in stack.push(.id("N"))}
+            Rule(.uppercaseLetter, expression: /.N)
         case .oLower:
-            Construction(.lowercaseLetter, expression: /.o) {stack in stack.push(.id("o"))}
+            Rule(.lowercaseLetter, expression: /.o)
         case .OUpper:
-            Construction(.uppercaseLetter, expression: /.O) {stack in stack.push(.id("O"))}
+            Rule(.uppercaseLetter, expression: /.O)
         case .pLower:
-            Construction(.lowercaseLetter, expression: /.p) {stack in stack.push(.id("p"))}
+            Rule(.lowercaseLetter, expression: /.p)
         case .PUpper:
-            Construction(.uppercaseLetter, expression: /.P) {stack in stack.push(.id("P"))}
+            Rule(.uppercaseLetter, expression: /.P)
         case .qLower:
-            Construction(.lowercaseLetter, expression: /.q) {stack in stack.push(.id("q"))}
+            Rule(.lowercaseLetter, expression: /.q)
         case .QUpper:
-            Construction(.uppercaseLetter, expression: /.Q) {stack in stack.push(.id("Q"))}
+            Rule(.uppercaseLetter, expression: /.Q)
         case .rLower:
-            Construction(.lowercaseLetter, expression: /.r) {stack in stack.push(.id("r"))}
+            Rule(.lowercaseLetter, expression: /.r)
         case .RUpper:
-            Construction(.uppercaseLetter, expression: /.R) {stack in stack.push(.id("R"))}
+            Rule(.uppercaseLetter, expression: /.R)
         case .sLower:
-            Construction(.lowercaseLetter, expression: /.s) {stack in stack.push(.id("s"))}
+            Rule(.lowercaseLetter, expression: /.s)
         case .SUpper:
-            Construction(.uppercaseLetter, expression: /.S) {stack in stack.push(.id("S"))}
+            Rule(.uppercaseLetter, expression: /.S)
         case .tLower:
-            Construction(.lowercaseLetter, expression: /.t) {stack in stack.push(.id("t"))}
+            Rule(.lowercaseLetter, expression: /.t)
         case .TUpper:
-            Construction(.uppercaseLetter, expression: /.T) {stack in stack.push(.id("T"))}
+            Rule(.uppercaseLetter, expression: /.T)
         case .uLower:
-            Construction(.lowercaseLetter, expression: /.u) {stack in stack.push(.id("u"))}
+            Rule(.lowercaseLetter, expression: /.u)
         case .UUpper:
-            Construction(.uppercaseLetter, expression: /.U) {stack in stack.push(.id("U"))}
+            Rule(.uppercaseLetter, expression: /.U)
         case .vLower:
-            Construction(.lowercaseLetter, expression: /.v) {stack in stack.push(.id("v"))}
+            Rule(.lowercaseLetter, expression: /.v)
         case .VUpper:
-            Construction(.uppercaseLetter, expression: /.V) {stack in stack.push(.id("V"))}
+            Rule(.uppercaseLetter, expression: /.V)
         case .wLower:
-            Construction(.lowercaseLetter, expression: /.w) {stack in stack.push(.id("w"))}
+            Rule(.lowercaseLetter, expression: /.w)
         case .WUpper:
-            Construction(.uppercaseLetter, expression: /.W) {stack in stack.push(.id("W"))}
+            Rule(.uppercaseLetter, expression: /.W)
         case .xLower:
-            Construction(.lowercaseLetter, expression: /.x) {stack in stack.push(.id("x"))}
+            Rule(.lowercaseLetter, expression: /.x)
         case .XUpper:
-            Construction(.uppercaseLetter, expression: /.X) {stack in stack.push(.id("X"))}
+            Rule(.uppercaseLetter, expression: /.X)
         case .yLower:
-            Construction(.lowercaseLetter, expression: /.y) {stack in stack.push(.id("y"))}
+            Rule(.lowercaseLetter, expression: /.y)
         case .YUpper:
-            Construction(.uppercaseLetter, expression: /.Y) {stack in stack.push(.id("Y"))}
+            Rule(.uppercaseLetter, expression: /.Y)
         case .zLower:
-            Construction(.lowercaseLetter, expression: /.z) {stack in stack.push(.id("z"))}
+            Rule(.lowercaseLetter, expression: /.z)
         case .zUpper:
-            Construction(.uppercaseLetter, expression: /.Z) {stack in stack.push(.id("Z"))}
+            Rule(.uppercaseLetter, expression: /.Z)
             
             
         case .letterUpper:
-            Construction(.letter, expression: /.uppercaseLetter) {stack in
-                guard let peek = stack.peek(), case .id(let str) = peek, str.count == 1, !str.first!.isLowercase else {
-                    throw NSError()
-                }
-            }
+            Rule(.letter, expression: /.uppercaseLetter)
         case .letterLower:
-            Construction(.letter, expression: /.lowercaseLetter) {stack in
-                guard let peek = stack.peek(), case .id(let str) = peek, str.count == 1, str.first!.isLowercase else {
-                    throw NSError()
-                }
-            }
+            Rule(.letter, expression: /.lowercaseLetter)
             
             
         case .oneOneNine:
-            Construction(.oneNine, expression: /.one) {stack in stack.push(.int(1))}
+            Rule(.oneNine, expression: /.one)
         case .twoOneNine:
-            Construction(.oneNine, expression: /.two) {stack in stack.push(.int(2))}
+            Rule(.oneNine, expression: /.two)
         case .threeOneNine:
-            Construction(.oneNine, expression: /.three) {stack in stack.push(.int(3))}
+            Rule(.oneNine, expression: /.three)
         case .fourOneNine:
-            Construction(.oneNine, expression: /.four) {stack in stack.push(.int(4))}
+            Rule(.oneNine, expression: /.four)
         case .fiveOneNine:
-            Construction(.oneNine, expression: /.five) {stack in stack.push(.int(5))}
+            Rule(.oneNine, expression: /.five)
         case .sixOneNine:
-            Construction(.oneNine, expression: /.six) {stack in stack.push(.int(6))}
+            Rule(.oneNine, expression: /.six)
         case .sevenOneNine:
-            Construction(.oneNine, expression: /.seven) {stack in stack.push(.int(7))}
+            Rule(.oneNine, expression: /.seven)
         case .eightOneNine:
-            Construction(.oneNine, expression: /.eight) {stack in stack.push(.int(8))}
+            Rule(.oneNine, expression: /.eight)
         case .nineOneNine:
-            Construction(.oneNine, expression: /.nine) {stack in stack.push(.int(9))}
+            Rule(.oneNine, expression: /.nine)
             
             
         case .zeroDigit:
-            Construction(.digit, expression: /.zero) {stack in stack.push(.int(0))}
+            Rule(.digit, expression: /.zero)
         case .oneNineDigit:
-            Construction(.digit, expression: /.oneNine) {stack in
-                guard let peek = stack.peek(), case .int = peek else {
-                    throw NSError()
-                }
-            }
+            Rule(.digit, expression: /.oneNine)
             
             
         case .digitDigits:
-            Construction(.digits, expression: /.digit) { stack in
-                guard let peek = stack.peek(), case .int = peek else {
-                    throw NSError()
-                }
-            }
+            Rule(.digits, expression: /.digit)
         case .digitDigitsDigits:
-            Construction(.digits, expression: /.digit, /.digits) {stack in
-                guard let digits = stack.pop(),
-                      case .int(let digits) = digits,
-                      let digit = stack.pop(),
-                      case .int(let digit) = digit else {
-                    throw NSError()
-                }
-                stack.push(.int(Int("\(digit)\(digits)")!))
-            }
+            Rule(.digits, expression: /.digit, /.digits)
             
             
         case .oneNineDigitsInt:
-            Construction(.integer, expression: /.oneNine, /.digits) { stack in
-                guard let digits = stack.pop(),
-                      case .int(let digits) = digits,
-                      let oneNine = stack.pop(),
-                      case .int(let oneNine) = oneNine else {
-                    throw NSError()
-                }
-                stack.push(.int(Int("\(oneNine)\(digits)")!))
-            }
+            Rule(.integer, expression: /.oneNine, /.digits)
         case .zeroInt:
-            Construction(.integer, expression: /.zero) { stack in
-                guard let peek = stack.peek(), case .int(let zero) = peek, zero == 0 else {
-                    throw NSError()
-                }
-            }
+            Rule(.integer, expression: /.zero)
             
             
         case .digitDigitOrLetter:
-            Construction(.digitOrLetter, expression: /.digit) { stack in
-                // todo
-            }
+            Rule(.digitOrLetter, expression: /.digit)
         case .letterDigitOrLetter:
-            Construction(.digitOrLetter, expression: /.letter) { stack in
-                // todo
-            }
+            Rule(.digitOrLetter, expression: /.letter)
             
             
         case .letterId:
-            Construction(.identifier, expression: /.letter) {stack in
-                guard let letter = stack.peek(), case .id = letter else {
-                    throw NSError()
-                }
-            }
-        case .idDigitOrLetterId:
-            Construction(.identifier, expression: /.identifier, /.digitOrLetter) { stack in
-                guard let digitOrLetter = stack.pop(),
-                      let id = stack.pop(),
-                      case .id(let id) = id else {
-                    throw NSError()
-                }
-                switch digitOrLetter {
-                case .id(let str):
-                    stack.push(.id(id + str))
-                case .int(let int):
-                    stack.push(.id(id + "\(int)"))
-                }
-            }
+            Rule(.identifier, expression: /.letter)
+        case .letterDigitsOrLettersId:
+            Rule(.identifier, expression: /.identifier, /.digitOrLetter)
             
         case .idIntOrId:
-            Construction(.intOrId, expression: /.identifier) {stack in
-                //todo
-            }
+            Rule(.intOrId, expression: /.identifier)
             
         case .intIntOrId:
-            Construction(.intOrId, expression: /.integer) {stack in
-                //todo
-            }
-            
+            Rule(.intOrId, expression: /.integer)
         }
     }
     
     
-}
-
-enum IdOrInt : Equatable {
-    case id(String)
-    case int(Int)
 }
 
 enum Terminals : Character, Terminal {
@@ -564,5 +496,5 @@ enum Terminals : Character, Terminal {
 }
 
 enum NonTerminals : String, NonTerminal {
-    case uppercaseLetter, lowercaseLetter, letter, oneNine, digit, digits, integer, digitOrLetter, identifier, intOrId
+    case uppercaseLetter, lowercaseLetter, letter, oneNine, digit, digits, integer, digitOrLetter, digitsOrLetters, identifier, intOrId
 }
