@@ -78,6 +78,30 @@ public extension Parser {
         try parse(stream, do: {$1.push($0)})
     }
     
+    func buildAST(_ stream: String) throws -> AST<R>? {
+        var stack = try parse(stream) { (rule, stack : inout Stack<AST<R>>) in
+            let constr = rule.rule
+            
+            var children = [ASTChildType<R>]()
+            
+            for rhs in constr.rhs {
+                switch rhs {
+                case .term(let t):
+                    children.append(.leave(terminal: t))
+                case .nonTerm(let nT):
+                    guard let pop = stack.pop() else {
+                        throw UndefinedState()
+                    }
+                    children.append(.ast(ast: pop, variable: nT))
+                }
+            }
+            
+            stack.push(AST(rule: rule, children: children))
+            
+        }
+        return stack.pop()
+    }
+    
     func parse(_ stream: String) throws -> R.Output? where R : Constructions {
         var stack = try parse(stream, do: {try $0.construction.parse(&$1)})
         return stack.pop()
