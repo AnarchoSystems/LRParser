@@ -11,9 +11,7 @@ final class LRParserTests: XCTestCase {
     func testDecodeEncodeEqual() throws {
         let parser = try Parser.LR0(rules: MyRules.self)
         let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
         let data = try encoder.encode(parser)
-        print(String(data: data, encoding: .utf8)!)
         let newParser = try JSONDecoder().decode(Parser<MyRules>.self, from: data)
         XCTAssertEqual(parser, newParser)
     }
@@ -422,10 +420,10 @@ enum Grammar : String, Rules {
             Rule(.intOrId, expression: /.integer)
             
         case .flatInt:
-            Rule(.integer, expression: /.unreachableInt)
+            Rule(.integer, expression: /.flatInt)
             
         case .flatId:
-            Rule(.identifier, expression: /.unreachableId)
+            Rule(.identifier, expression: /.flatId)
             
         }
     }
@@ -516,5 +514,5 @@ enum Terminals : Character, Terminal {
 }
 
 enum NonTerminals : String, NonTerminal {
-    case uppercaseLetter, lowercaseLetter, letter, oneNine, digit, digits, integer, digitOrLetter, digitsOrLetters, identifier, intOrId, unreachableInt, unreachableId
+    case uppercaseLetter, lowercaseLetter, letter, oneNine, digit, digits, integer, digitOrLetter, digitsOrLetters, identifier, intOrId, flatInt, flatId
 }

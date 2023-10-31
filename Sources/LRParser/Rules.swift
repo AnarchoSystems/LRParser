@@ -5,7 +5,7 @@
 //  Created by Markus Kasperczyk on 28.10.23.
 //
 
-public protocol Terminal : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == Character {}
+public protocol Terminal : RawRepresentable, CustomDebugStringConvertible, CaseIterable, Codable, Hashable where RawValue == Character {}
 
 public extension Terminal {
     init(from decoder: Decoder) throws {
@@ -17,9 +17,18 @@ public extension Terminal {
     func encode(to encoder: Encoder) throws {
         try String(rawValue).encode(to: encoder)
     }
+    var debugDescription: String {
+        String(rawValue)
+    }
 }
 
-public protocol NonTerminal : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == String {}
+public protocol NonTerminal : RawRepresentable, CustomDebugStringConvertible, CaseIterable, Codable, Hashable where RawValue == String {}
+
+public extension NonTerminal {
+    var debugDescription: String {
+        rawValue
+    }
+}
 
 public protocol Rules<Term, NTerm> : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == String {
     associatedtype Term : Terminal
