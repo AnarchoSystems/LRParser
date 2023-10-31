@@ -45,12 +45,12 @@ final class LRParserTests: XCTestCase {
         XCTAssertNoThrow(try parser.parse("102345432345432543234565403"))
         XCTAssertThrowsError(try parser.parse("5465423564a"))
         XCTAssertThrowsError(try parser.parse("0142565432364"))
-        let str = "124356354231500243542024302"
-        let expectedAST = AST(rule: Grammar.intIntOrId,
-                              children: [.ast(ast: AST(rule: .flatInt,
+        let str = "a124356354231500243542024302"
+        let expectedAST = AST(rule: Grammar.idIntOrId,
+                              children: [.ast(ast: AST(rule: .flatId,
                                                        children: str.map(Terminals.init).map(\.unsafelyUnwrapped).map(ASTChildType.leaf)))
                                         ])
-        XCTAssertEqual(try parser.parse(str), expectedAST)
+        XCTAssertEqual(try parser.parse(str)!, expectedAST)
     }
     
 }
@@ -71,7 +71,7 @@ extension ASTChildType : CustomDebugStringConvertible {
 extension AST : CustomDebugStringConvertible {
  
     public var debugDescription: String {
-        rule.rawValue + "\n\t" + children.map(\.debugDescription).joined(separator: "\n")
+        rule.rawValue + "\n\t" + children.map(\.debugDescription).joined(separator: " ")
     }
     
 }
