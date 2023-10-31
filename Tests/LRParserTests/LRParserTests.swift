@@ -5,8 +5,7 @@ final class LRParserTests: XCTestCase {
     
     func testOnePlusOneLR0() throws {
         let parser = try Parser.LR0(rules: MyRules.self)
-        let ast = try parser.parse("1+1")
-        XCTAssertEqual(ast, .plus(.b(.one), .one))
+        XCTAssertNoThrow(try parser.parse("1+1"))
     }
     
     func testDecodeEncodeEqual() throws {
@@ -26,12 +25,12 @@ final class LRParserTests: XCTestCase {
     
     func testOnes() throws {
         let parser = try Parser.CLR1(rules: NonLR0.self)
-        XCTAssertNoThrow(try parser.buildAST("111111"))
+        XCTAssertNoThrow(try parser.parse("111111"))
     }
     
     func testCLR1() throws {
         let parser = try Parser.CLR1(rules: CLR1Rules.self)
-        XCTAssertNoThrow(try parser.buildAST("aabaaab"))
+        XCTAssertNoThrow(try parser.parse("aabaaab"))
     }
     
     func testLL() {
@@ -41,11 +40,17 @@ final class LRParserTests: XCTestCase {
     func testGrammar() throws {
         XCTAssertThrowsError(try Parser.LR0(rules: Grammar.self))
         let parser = try Parser.CLR1(rules: Grammar.self)
-        XCTAssertNoThrow(try parser.buildAST("Foo"))
-        XCTAssertNoThrow(try parser.buildAST("Bar1345"))
-        XCTAssertNoThrow(try parser.buildAST("102345432345432543234565403"))
-        XCTAssertThrowsError(try parser.buildAST("5465423564a"))
-        XCTAssertThrowsError(try parser.buildAST("0142565432364"))
+        XCTAssertNoThrow(try parser.parse("Foo"))
+        XCTAssertNoThrow(try parser.parse("Bar1345"))
+        XCTAssertNoThrow(try parser.parse("102345432345432543234565403"))
+        XCTAssertThrowsError(try parser.parse("5465423564a"))
+        XCTAssertThrowsError(try parser.parse("0142565432364"))
+        let str = "124356354231500243542024302"
+        let expectedAST = AST(rule: Grammar.intIntOrId,
+                              children: [.ast(ast: AST(rule: .flatInt,
+                                                       children: str.map(Terminals.init).map(\.unsafelyUnwrapped).map(ASTChildType.leave)))
+                                        ])
+        XCTAssertEqual(try parser.parse(str), expectedAST)
     }
     
 }
@@ -61,10 +66,12 @@ enum NonLLNTerminal : String, NonTerminal {
 }
 
 enum NonLL : String, Rules {
+    typealias Term = NonLLTerminal
+    typealias NTerm = NonLLNTerminal
     case ouch
     case term
     static var goal : NonLLNTerminal {.A}
-    var rule : Rule<NonLLTerminal, NonLLNTerminal> {
+    var rule : Rule<Self> {
         switch self {
         case .ouch:
             Rule(.A, expression: /.A, /.a)
@@ -88,7 +95,9 @@ enum MyNTerm : String, NonTerminal {
 
 extension String : Error {}
 
-enum MyRules : String, Constructions {
+enum MyRules : String, Rules {
+    typealias Term = MyTerm
+    typealias NTerm = MyNTerm
     
     case eTimes
     case ePlus
@@ -98,59 +107,19 @@ enum MyRules : String, Constructions {
     
     static var goal: MyNTerm {.E}
     
-    var construction: Construction<MyTerm, MyNTerm, eAST> {
+    var rule: Rule<Self> {
         switch self {
         case .eTimes:
-            Construction(.E, expression: /.E, /.times, /.B) {stack in
-                guard let eb = stack.pop(),
-                      let b = eb.asB,
-                      let e = stack.pop() else {
-                    throw "Ouch"
-                }
-                stack.push(.times(e, b))
-            }
+            Rule(.E, expression: /.E, /.times, /.B)
         case .ePlus:
-            Construction(.E, expression: /.E, /.plus, /.B) {stack in
-                guard let eb = stack.pop(),
-                      let b = eb.asB,
-                      let e = stack.pop() else {
-                    throw "Ouch"
-                }
-                stack.push(.plus(e, b))
-            }
+            Rule(.E, expression: /.E, /.plus, /.B)
         case .eB:
-            Construction(.E, expression: /.B) {stack in
-                guard let eb = stack.peek(),
-                      nil != eb.asB else {
-                    throw "Ouch"
-                }
-            }
+            Rule(.E, expression: /.B)
         case .bZero:
-            Construction(.B, expression: /.zero) {stack in
-                stack.push(.b(.zero))
-            }
+            Rule(.B, expression: /.zero)
         case .bOne:
-            Construction(.B, expression: /.one) {stack in
-                stack.push(.b(.one))
-            }
+            Rule(.B, expression: /.one)
         }
-    }
-}
-
-enum bAST : Equatable {
-    case zero
-    case one
-}
-
-indirect enum eAST : Equatable {
-    case b(bAST)
-    case plus(Self, bAST)
-    case times(Self, bAST)
-    var asB : bAST? {
-        guard case .b(let b) = self else {
-            return nil
-        }
-        return b
     }
 }
 
@@ -163,13 +132,15 @@ enum NonLR0NTerm : String, NonTerminal {
 }
 
 enum NonLR0 : String, Rules {
+    typealias Term = NonLR0Term
+    typealias NTerm = NonLR0NTerm
     
     case eIsOne
     case oneE
     
     static var goal : NonLR0NTerm {.E}
     
-    var rule: Rule<NonLR0Term, NonLR0NTerm> {
+    var rule: Rule<Self> {
         switch self {
         case .eIsOne:
             return Rule(.E, expression: /.one)
@@ -193,13 +164,15 @@ enum CLR1NTerm : String, NonTerminal {
 }
 
 enum CLR1Rules : String, Rules {
+    typealias Term = CLR1Term
+    typealias NTerm = CLR1NTerm
     case SAA
     case AaA
     case Ab
     static var goal : CLR1NTerm {
         .S
     }
-    var rule: Rule<CLR1Term, CLR1NTerm> {
+    var rule: Rule<Self> {
         switch self {
         case .SAA:
             Rule(.S, expression: /.A, /.A)
@@ -253,9 +226,12 @@ enum Grammar : String, Rules {
          letterDigitsOrLettersId,
          
          idIntOrId,
-         intIntOrId
+         intIntOrId,
+         
+         flatInt,
+         flatId
     
-    var rule: Rule<Terminals, NonTerminals> {
+    var rule: Rule<Self> {
         switch self {
         case .aLower:
             Rule(.lowercaseLetter, expression: /.a)
@@ -402,9 +378,9 @@ enum Grammar : String, Rules {
             
             
         case .oneNineDigitsInt:
-            Rule(.integer, expression: /.oneNine, /.digits)
+            Rule(.integer, expression: /.oneNine, /.digits, transform: flattenInt)
         case .zeroInt:
-            Rule(.integer, expression: /.zero)
+            Rule(.integer, expression: /.zero, transform: flattenInt)
             
             
         case .digitDigitOrLetter:
@@ -414,19 +390,42 @@ enum Grammar : String, Rules {
             
             
         case .letterId:
-            Rule(.identifier, expression: /.letter)
+            Rule(.identifier, expression: /.letter, transform: flattenId)
         case .letterDigitsOrLettersId:
-            Rule(.identifier, expression: /.identifier, /.digitOrLetter)
+            Rule(.identifier, expression: /.identifier, /.digitOrLetter, transform: flattenId)
             
         case .idIntOrId:
             Rule(.intOrId, expression: /.identifier)
             
         case .intIntOrId:
             Rule(.intOrId, expression: /.integer)
+            
+        case .flatInt:
+            Rule(.integer, expression: /.unreachableInt)
+            
+        case .flatId:
+            Rule(.identifier, expression: /.unreachableId)
+            
         }
     }
     
-    
+}
+
+func flattenInt(_ ast: AST<Grammar>) -> AST<Grammar> {
+    AST(rule: .flatInt, children: ast.children.flatMap(flatten))
+}
+
+func flattenId(_ ast: AST<Grammar>) -> AST<Grammar> {
+    AST(rule: .flatId, children: ast.children.flatMap(flatten))
+}
+
+func flatten(_ child: ASTChildType<Grammar>) -> [ASTChildType<Grammar>] {
+    switch child {
+    case .ast(ast: let ast):
+        ast.children.flatMap(flatten)
+    case .leave(terminal: let terminal):
+        [.leave(terminal: terminal)]
+    }
 }
 
 enum Terminals : Character, Terminal {
@@ -496,5 +495,5 @@ enum Terminals : Character, Terminal {
 }
 
 enum NonTerminals : String, NonTerminal {
-    case uppercaseLetter, lowercaseLetter, letter, oneNine, digit, digits, integer, digitOrLetter, digitsOrLetters, identifier, intOrId
+    case uppercaseLetter, lowercaseLetter, letter, oneNine, digit, digits, integer, digitOrLetter, digitsOrLetters, identifier, intOrId, unreachableInt, unreachableId
 }

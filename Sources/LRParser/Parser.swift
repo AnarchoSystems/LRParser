@@ -49,7 +49,7 @@ private extension Parser {
 
 public extension Parser {
     
-    func parse<Out>(_ stream: String, do construction: (R, inout Stack<Out>) throws -> Void) throws ->Stack<Out> {
+    func withStack<Out>(_ stream: String, do construction: (R, inout Stack<Out>) throws -> Void) throws ->Stack<Out> {
         
         var index = stream.startIndex
         var current = stream.first
@@ -111,11 +111,11 @@ public extension Parser {
     }
     
     func buildStack(_ stream: String) throws -> Stack<R> {
-        try parse(stream, do: {$1.push($0)})
+        try withStack(stream, do: {$1.push($0)})
     }
     
-    func buildAST(_ stream: String) throws -> AST<R>? {
-        var stack = try parse(stream) { (rule, stack : inout Stack<AST<R>>) in
+    func parse(_ stream: String) throws -> AST<R>? {
+        var stack = try withStack(stream) { (rule, stack : inout Stack<AST<R>>) in
             let constr = rule.rule
             
             var children = [ASTChildType<R>]()
@@ -124,22 +124,23 @@ public extension Parser {
                 switch rhs {
                 case .term(let t):
                     children.append(.leave(terminal: t))
-                case .nonTerm(let nT):
+                case .nonTerm:
                     guard let pop = stack.pop() else {
                         throw StackIsEmpty(rule: rule)
                     }
-                    children.append(.ast(ast: pop, variable: nT))
+                    children.append(.ast(ast: pop))
                 }
             }
             
-            stack.push(AST(rule: rule, children: children))
+            children.reverse()
+            
+            let newAst = try constr.transform(AST(rule: rule, children: children))
+            if newAst.rule.rule.lhs != constr.lhs {
+                throw InvalidASTTransform(lhsBefore: newAst.rule.rule.lhs, lhsAfter: constr.lhs)
+            }
+            stack.push(newAst)
             
         }
-        return stack.pop()
-    }
-    
-    func parse(_ stream: String) throws -> R.Output? where R : Constructions {
-        var stack = try parse(stream, do: {try $0.construction.parse(&$1)})
         return stack.pop()
     }
     
@@ -147,4 +148,9 @@ public extension Parser {
 
 public struct StackIsEmpty<R: Rules> : Error {
     public let rule : R
+}
+
+public struct InvalidASTTransform<NTerm : NonTerminal> : Error {
+    public let lhsBefore : NTerm
+    public let lhsAfter : NTerm
 }

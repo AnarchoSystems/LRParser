@@ -8,7 +8,7 @@
 // MARK: FIRST
 
 fileprivate extension Rules {
-    static func first(_ expr: Expr<Term, NTerm>) -> Set<Term?> {
+    static func first(_ expr: Expr<Self>) -> Set<Term?> {
         switch expr {
         case .term(let term):
             return [term]
@@ -47,10 +47,10 @@ fileprivate extension Rules {
 fileprivate struct Item<R : Rules> : Node {
     
     let rule : R?
-    let all : [Expr<R.Term, R.NTerm>]
+    let all : [Expr<R>]
     let lookAheads : Set<R.Term?>
     let ptr : Int
-    let firsts : [Expr<R.Term, R.NTerm> : Set<R.Term?>]
+    let firsts : [Expr<R> : Set<R.Term?>]
     
     func canReach (lookup: inout Void) -> [R.NTerm : [Item<R>]] {
         guard let next = tbd.first, case .nonTerm(let nT) = next else {
@@ -81,10 +81,10 @@ fileprivate struct ItemSet<R : Rules> {
 
 extension Item {
     
-    func tryAdvance(_ expr: Expr<R.Term, R.NTerm>) -> Item<R>? {
+    func tryAdvance(_ expr: Expr<R>) -> Item<R>? {
         tbd.first.flatMap{$0 == expr ? Item(rule: rule, all: all, lookAheads: lookAheads, ptr: ptr + 1, firsts: firsts) : nil}
     }
-    var tbd : some Collection<Expr<R.Term, R.NTerm>> {
+    var tbd : some Collection<Expr<R>> {
         all[ptr...]
     }
     
@@ -97,7 +97,7 @@ extension ItemSet : Node {
         var seedLookup : [[Item<R>] : ItemSet<R>]
     }
     
-    func canReach(lookup: inout Lookup) throws -> [Expr<R.Term, R.NTerm> : [ItemSet<R>]] {
+    func canReach(lookup: inout Lookup) throws -> [Expr<R> : [ItemSet<R>]] {
         let exprs = Set(graph.nodes.compactMap(\.tbd.first))
         let terms = Set(exprs.compactMap{expr -> R.Term? in
             guard case .term(let t) = expr else {return nil}
@@ -167,7 +167,7 @@ extension ItemSetTable {
         
         // shifts
         
-        let keyAndVals = graph.edges.compactMap{(key : Expr<R.Term, R.NTerm>, vals : [Int : [Int]]) -> (R.Term, [Int : Action<R>])? in
+        let keyAndVals = graph.edges.compactMap{(key : Expr<R>, vals : [Int : [Int]]) -> (R.Term, [Int : Action<R>])? in
             guard case .term(let t) = key else {return nil}
             let dict = Dictionary(uniqueKeysWithValues: vals.map{start, ends in
                 assert(ends.count == 1)
@@ -212,7 +212,7 @@ extension ItemSetTable {
     }
     
     var gotoTable : [R.NTerm : [Int : Int]] {
-        Dictionary(uniqueKeysWithValues: graph.edges.compactMap{(key : Expr<R.Term, R.NTerm>, vals : [Int : [Int]]) in
+        Dictionary(uniqueKeysWithValues: graph.edges.compactMap{(key : Expr<R>, vals : [Int : [Int]]) in
             guard case .nonTerm(let nT) = key else {return nil}
             return (nT, vals.mapValues{ints in
                 assert(ints.count == 1)

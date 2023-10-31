@@ -40,105 +40,13 @@ enum NonLR0 : String, Rules {
     
     func testOnes() throws {
         let parser = try Parser.CLR1(rules: NonLR0.self)
-        XCTAssertNoThrow(try parser.buildStack("111111"))
+        XCTAssertNoThrow(try parser.parse("111111"))
     }
     
 ```
 
-One can also immediately specify what to do with the parser output *while* defining the grammar:
+One can also specify AST transformations in the rules.
 
-```Swift
-
-enum MyTerm : Character, Terminal {
-    case zero = "0"
-    case one = "1"
-    case plus = "+"
-    case times = "*"
-}
-
-enum MyNTerm : String, NonTerminal {
-    case E
-    case B
-}
-
-extension String : Error {}
-
-enum MyRules : String, Constructions {
-    
-    case eTimes
-    case ePlus
-    case eB
-    case bZero
-    case bOne
-    
-    static var goal: MyNTerm {.E}
-    
-    var construction: Construction<MyTerm, MyNTerm, eAST> {
-        switch self {
-        case .eTimes:
-            Construction(.E, expression: /.E, /.times, /.B) {stack in
-                guard let eb = stack.pop(),
-                      let b = eb.asB,
-                      let e = stack.pop() else {
-                    throw "Ouch"
-                }
-                stack.push(.times(e, b))
-            }
-        case .ePlus:
-            Construction(.E, expression: /.E, /.plus, /.B) {stack in
-                guard let eb = stack.pop(),
-                      let b = eb.asB,
-                      let e = stack.pop() else {
-                    throw "Ouch"
-                }
-                stack.push(.plus(e, b))
-            }
-        case .eB:
-            Construction(.E, expression: /.B) {stack in
-                guard let eb = stack.peek(),
-                      nil != eb.asB else {
-                    throw "Ouch"
-                }
-            }
-        case .bZero:
-            Construction(.B, expression: /.zero) {stack in
-                stack.push(.b(.zero))
-            }
-        case .bOne:
-            Construction(.B, expression: /.one) {stack in
-                stack.push(.b(.one))
-            }
-        }
-    }
-}
-
-enum bAST : Equatable {
-    case zero
-    case one
-}
-
-indirect enum eAST : Equatable {
-    case b(bAST)
-    case plus(Self, bAST)
-    case times(Self, bAST)
-    var asB : bAST? {
-        guard case .b(let b) = self else {
-            return nil
-        }
-        return b
-    }
-}
-
-// Test
-
-
-    func testOnePlusOneLR0() throws {
-        let parser = try Parser.LR0(rules: MyRules.self)
-        let ast = try parser.parse("1+1")
-        XCTAssertEqual(ast, .plus(.b(.one), .one))
-    }
-    
-```
 
 # Further Reading
 

@@ -5,12 +5,12 @@
 //  Created by Markus Kasperczyk on 31.10.23.
 //
 
-public enum ASTChildType<R : Rules> {
-    indirect case ast(ast: AST<R>, variable: R.NTerm)
+public enum ASTChildType<R : Rules> : Equatable {
+    indirect case ast(ast: AST<R>)
     case leave(terminal: R.Term)
 }
 
-public struct AST<R : Rules> {
+public struct AST<R : Rules> : Equatable {
     
     public let rule : R
     public let children : [ASTChildType<R>]

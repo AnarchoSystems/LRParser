@@ -21,24 +21,27 @@ public extension Terminal {
 
 public protocol NonTerminal : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == String {}
 
-public protocol Rules : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == String {
+public protocol Rules<Term, NTerm> : RawRepresentable, CaseIterable, Codable, Hashable where RawValue == String {
     associatedtype Term : Terminal
     associatedtype NTerm : NonTerminal
     static var goal : NTerm {get}
-    var rule : Rule<Term, NTerm> {get}
+    var rule : Rule<Self> {get}
 }
 
 
-public struct Rule<T : Terminal, NT : NonTerminal> {
-    public let lhs : NT
-    public let rhs : [Expr<T, NT>]
-    public init(_ lhs: NT, expression rhs: Expr<T, NT>...) {
+public struct Rule<R: Rules> {
+    public let lhs : R.NTerm
+    public let rhs : [Expr<R>]
+    public let transform : (AST<R>) throws -> AST<R>
+    public init(_ lhs: R.NTerm, expression rhs: Expr<R>..., transform: @escaping (AST<R>) throws -> AST<R> = {$0}) {
         self.lhs = lhs
         self.rhs = rhs
+        self.transform = transform
     }
-    public init(_ lhs: NT, rhs: [Expr<T, NT>]) {
+    public init(_ lhs: R.NTerm, rhs: [Expr<R>], transform: @escaping (AST<R>) throws -> AST<R> = {$0}) {
         self.lhs = lhs
         self.rhs = rhs
+        self.transform = transform
     }
 }
 
