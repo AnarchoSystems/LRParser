@@ -48,7 +48,7 @@ final class LRParserTests: XCTestCase {
         let str = "124356354231500243542024302"
         let expectedAST = AST(rule: Grammar.intIntOrId,
                               children: [.ast(ast: AST(rule: .flatInt,
-                                                       children: str.map(Terminals.init).map(\.unsafelyUnwrapped).map(ASTChildType.leave)))
+                                                       children: str.map(Terminals.init).map(\.unsafelyUnwrapped).map(ASTChildType.leaf)))
                                         ])
         XCTAssertEqual(try parser.parse(str), expectedAST)
     }
@@ -423,8 +423,8 @@ func flatten(_ child: ASTChildType<Grammar>) -> [ASTChildType<Grammar>] {
     switch child {
     case .ast(ast: let ast):
         ast.children.flatMap(flatten)
-    case .leave(terminal: let terminal):
-        [.leave(terminal: terminal)]
+    case .leaf(terminal: let terminal):
+        [.leaf(terminal: terminal)]
     }
 }
 

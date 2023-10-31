@@ -7,7 +7,7 @@
 
 public enum ASTChildType<R : Rules> : Equatable {
     indirect case ast(ast: AST<R>)
-    case leave(terminal: R.Term)
+    case leaf(terminal: R.Term)
 }
 
 public struct AST<R : Rules> : Equatable {
