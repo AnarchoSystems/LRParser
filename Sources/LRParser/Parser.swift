@@ -123,7 +123,7 @@ public extension Parser {
             for rhs in constr.rhs {
                 switch rhs {
                 case .term(let t):
-                    children.append(.leave(terminal: t))
+                    children.append(.leaf(terminal: t))
                 case .nonTerm:
                     guard let pop = stack.pop() else {
                         throw StackIsEmpty(rule: rule)

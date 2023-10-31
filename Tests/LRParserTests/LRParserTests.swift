@@ -55,6 +55,27 @@ final class LRParserTests: XCTestCase {
     
 }
 
+extension ASTChildType : CustomDebugStringConvertible {
+    
+    public var debugDescription: String {
+        switch self {
+        case .ast(ast: let ast):
+            ast.debugDescription
+        case .leaf(terminal: let terminal):
+            "\'\(terminal.rawValue)\'"
+        }
+    }
+    
+}
+
+extension AST : CustomDebugStringConvertible {
+ 
+    public var debugDescription: String {
+        rule.rawValue + "\n\t" + children.map(\.debugDescription).joined(separator: "\n")
+    }
+    
+}
+
 // examples from https://en.wikipedia.org/wiki/LR_parser#Additional_example_1+1
 
 enum NonLLTerminal : Character, Terminal {
